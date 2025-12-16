@@ -1,0 +1,21 @@
+# Rust build artifacts
+target/
+
+# OS artifacts
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Models (Downloaded by script)
+*.onnx
+*.bin
+*.xml
+
+# Editor/IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Local Logs
+*.log

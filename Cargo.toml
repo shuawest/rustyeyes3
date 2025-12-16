@@ -1,0 +1,21 @@
+[package]
+name = "camera-lister"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+nokhwa = { version = "0.10", features = [
+    "input-v4l",          # For Linux
+    "input-avfoundation",  # For macOS
+    "input-msmf"          # For Windows
+] }
+tokio = { version = "1.0", features = ["full"] }
+thiserror = "1.0"
+anyhow = "1.0"
+clap = { version = "4.4", features = ["derive"] }
+image = "0.25"
+colored = "2"
+minifb = "0.24"
+ort = { version = "2.0.0-rc.9", features = ["coreml", "download-binaries"] }
+ndarray = "0.15"
+
