@@ -35,7 +35,8 @@ impl MoondreamOracle {
             .stdout(Stdio::piped())
             .stderr(Stdio::inherit()) // Show Python debug logs
             .spawn()
-            .context("Failed to spawn Python server. Is Python3 installed?")?;
+            .spawn()
+            .context("Failed to spawn Python server. Please run `./run.sh` to set up the environment.")?;
         
         let stdin = child.stdin.take()
             .context("Failed to open stdin to Python server")?;
