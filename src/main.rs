@@ -161,6 +161,7 @@ fn main() -> anyhow::Result<()> {
     let mut show_mesh = true; // Default
     let mut show_pose = true; // Default
     let mut show_gaze = false;
+    let mut mirror_mode = true; // Default ON per user request
     
     // We keep one robust pipeline active
     let mut pipeline = create_pipeline("pupil_gaze"); // This pipeline computes everything
@@ -172,7 +173,7 @@ fn main() -> anyhow::Result<()> {
 
         // Capture Frame (Unified)
         let mut latest_realtime_frame = if let Ok(mut cam_frame) = camera.capture() {
-             if args.mirror {
+             if mirror_mode {
                  image::imageops::flip_horizontal_in_place(&mut cam_frame);
              }
              cam_frame
@@ -189,7 +190,6 @@ fn main() -> anyhow::Result<()> {
              // TODO: Log onnx_data if needed
         }
         // --- INPUT HANDLING ---
-        // --- INPUT HANDLING ---
         for key in window.get_keys_pressed(minifb::KeyRepeat::No) {
             match key {
                 minifb::Key::Escape => {
@@ -202,6 +202,8 @@ fn main() -> anyhow::Result<()> {
                 minifb::Key::Key2 => show_pose = !show_pose,
                 minifb::Key::Key3 => show_gaze = !show_gaze,
                 
+                minifb::Key::Key5 => mirror_mode = !mirror_mode,
+
                 minifb::Key::Key6 => show_overlay = !show_overlay,
                 minifb::Key::Key7 => {
                     if moondream_active {
@@ -338,6 +340,7 @@ fn main() -> anyhow::Result<()> {
                 ("1", "Face Mesh", show_mesh),
                 ("2", "Head Pose", show_pose),
                 ("3", "Eye Gaze", show_gaze),
+                ("5", "Mirror", mirror_mode),
             ];
             
             // Adjust start position for larger text
@@ -370,6 +373,10 @@ fn main() -> anyhow::Result<()> {
                  font::draw_text_line(&mut display_buffer, width as usize, height as usize, 10, y_start, &text, color, menu_scale);
                 y_start += line_height;
             }
+
+            // --- WINDOW UPDATE ---
+            // CRITICAL: Must be called to show the frame!
+            window.update(&display_buffer)?;
         }
 
     Ok(())
