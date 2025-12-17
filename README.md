@@ -76,7 +76,7 @@
 
 ## Requirements
 
-See [REQUIREMENTS.md](REQUIREMENTS.md) for detailed specification.
+See [AGENTS.md](AGENTS.md) for detailed specification.
 
 ## License
 
