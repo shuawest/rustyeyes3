@@ -12,6 +12,7 @@ mod gaze;
 mod overlay;
 mod moondream;
 mod calibration;
+mod font;
 
 use args::Args;
 use camera::CameraSource;
@@ -87,6 +88,9 @@ fn main() -> anyhow::Result<()> {
     
     // Mouse Interaction State
     let mut mouse_down_prev = false;
+    
+    // HUD State
+    let mut last_calibration_point: Option<(f32, f32, u64)> = None;
 
     // --- MOONDREAM WORKER SETUP ---
     // Unbounded channel - worker will drain to get latest frame
@@ -232,13 +236,16 @@ fn main() -> anyhow::Result<()> {
                                if let Some((mx, my)) = window.get_mouse_pos(minifb::MouseMode::Pass) {
                                    // Pass the current landmarks/inference result to save with the image
                                    // IMPORTANT: Get timestamp back to send to Moondream
-                                   if let Ok(ts) = calibration_manager.save_data_point(&frame, mx, my, landmarks.clone()) {
-                                        // Send to Moondream Worker for background processing/correction
-                                        let img_buffer = image::ImageBuffer::<image::Rgb<u8>, _>::from_raw(width as u32, height as u32, frame.to_vec()).unwrap();
-                                        let dynamic_img = image::DynamicImage::ImageRgb8(img_buffer);
-                                        // We pass None for logging-data, and Some(ts) for ID
-                                        let _ = tx_frame.send((dynamic_img, None, Some(ts)));
-                                   }
+                                    if let Ok(ts) = calibration_manager.save_data_point(&frame, mx, my, landmarks.clone()) {
+                                         // Update HUD State
+                                         last_calibration_point = Some((mx, my, ts));
+                                         
+                                         // Send to Moondream Worker for background processing/correction
+                                         let img_buffer = image::ImageBuffer::<image::Rgb<u8>, _>::from_raw(width as u32, height as u32, frame.to_vec()).unwrap();
+                                         let dynamic_img = image::DynamicImage::ImageRgb8(img_buffer);
+                                         // We pass None for logging-data, and Some(ts) for ID
+                                         let _ = tx_frame.send((dynamic_img, None, Some(ts)));
+                                    }
                                } else {
                                    println!("Mouse not in window!");
                                }
@@ -498,6 +505,36 @@ fn main() -> anyhow::Result<()> {
                              }
                          }
                     }
+                }
+            }
+            
+            // Draw Calibration HUD (Mouse Position + Timestamp)
+            if calibration_mode {
+                if let Some((lx, ly, ts)) = last_calibration_point {
+                    use chrono::TimeZone;
+                    let dt = chrono::Local.timestamp_millis_opt(ts as i64).unwrap();
+                    let time_str = dt.format("%H:%M:%S").to_string();
+                    let hud_text = format!("LAST: ({:.0},{:.0}) AT {}", lx, ly, time_str);
+                    
+                    // Draw green crosshair at last point
+                    let cx = lx as usize;
+                    let cy = ly as usize;
+                    let size = 10;
+                    if cx < width as usize && cy < height as usize {
+                        // Horizontal
+                        for i in (cx.saturating_sub(size))..((cx+size).min(width as usize)) {
+                             let idx = (cy * width as usize + i) * 3;
+                             if idx < display_buffer.len() { display_buffer[idx] = 0; display_buffer[idx+1] = 255; display_buffer[idx+2] = 0; }
+                        }
+                        // Vertical
+                        for j in (cy.saturating_sub(size))..((cy+size).min(height as usize)) {
+                             let idx = (j * width as usize + cx) * 3;
+                             if idx < display_buffer.len() { display_buffer[idx] = 0; display_buffer[idx+1] = 255; display_buffer[idx+2] = 0; }
+                        }
+                    }
+                    
+                    // Draw Text
+                    font::draw_text_line(&mut display_buffer, width as usize, height as usize, 10, height as usize - 20, &hud_text, (0, 255, 0));
                 }
             }
             
