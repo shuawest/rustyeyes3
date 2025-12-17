@@ -88,6 +88,12 @@ The system shall support runtime-switchable pipelines:
   - `minifb`: Minimal windowing.
   - `image`: Image processing.
 
+### 2.3. Project Maintenance
+
+- **Changelog**: All functional changes, bug fixes, and architectural decisions MUST be documented in `CHANGELOG.md` at the root of the repository.
+- **Format**: The changelog shall follow [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) standards and include the reasoning ("Why") behind complex changes.
+- **Reference**: High-level design intent should be traced back to this Core Spec or specific Feature Specs.
+
 ## 3. Constraints & Assumptions
 
 - **OS**: Primary target macOS (Apple Silicon), but code should be cross-platform compatible (Linux/Windows).
