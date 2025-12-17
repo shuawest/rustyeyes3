@@ -544,13 +544,33 @@ fn main() -> anyhow::Result<()> {
             }
             
             // Draw Moondream Gold Gaze
-            if let Some(_pt) = moondream_result {
-                // Determine screen coordinates (assuming normalized?)
-                // Wait, Moondream output needs to be mapped.
-                // For now, assume MoondreamOracle returns result.
-                // We'll just draw a Gold Star at the result.
+            if let Some(pt) = moondream_result {
+                let mx = (pt.x * width as f32) as usize;
+                let my = (pt.y * height as f32) as usize;
                 
-                // Note: Implement proper mapping later.
+                // Draw Gold Star (Cross)
+                let color_gold = (255, 215, 0); // RGB
+                let size = 15;
+                if mx < width as usize && my < height as usize {
+                     for i in (mx.saturating_sub(size))..((mx+size).min(width as usize)) {
+                         // Horizontal
+                         let idx = (my * width as usize + i) * 3;
+                         if idx < display_buffer.len() { 
+                             display_buffer[idx] = color_gold.0; 
+                             display_buffer[idx+1] = color_gold.1; 
+                             display_buffer[idx+2] = color_gold.2; 
+                         }
+                     }
+                     for j in (my.saturating_sub(size))..((my+size).min(height as usize)) {
+                         // Vertical
+                         let idx = (j * width as usize + mx) * 3;
+                         if idx < display_buffer.len() { 
+                             display_buffer[idx] = color_gold.0; 
+                             display_buffer[idx+1] = color_gold.1; 
+                             display_buffer[idx+2] = color_gold.2; 
+                         }
+                     }
+                }
             }
 
             window.update(&display_buffer)?;

@@ -176,6 +176,16 @@ The system utilizes a **Hybrid Architecture**:
 - **Model**: `vikhyatk/moondream2` (likely quantized for edge performance on Pi/Device).
 - **Input**: 512x512 Resized image from Camera.
 
+## Verification & Regression Testing
+
+> [!IMPORTANT]
+> Visual indicators are critical for this system. Please verify alignment and presence of indicators after any changes.
+> See [REGRESSION_TESTS.md](./REGRESSION_TESTS.md) for the mandatory checklist.
+
+## Controls
+
+- `0`: Switch to Combined Mode (Mesh + Estimation)
+
 ## 5. Risk Assessment & Mitigations
 
 | Risk           | Impact                                            | Mitigation                                                           |

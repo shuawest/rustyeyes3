@@ -88,7 +88,8 @@ impl MoondreamOracle {
         
         // Parse gaze from natural language response
         let gaze_text = response.response.unwrap_or_default();
-        println!("[MOONDREAM] Gaze response: \"{}\"", gaze_text);
+        println!("[MOONDREAM] RAW RESPONSE: \"{}\"", gaze_text);
+        
         
         // Try to extract coordinates from response
         // Moondream might say things like "center", "top-left", "looking at the screen", etc.
