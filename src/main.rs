@@ -250,7 +250,7 @@ fn main() -> anyhow::Result<()> {
         
         if let Some(out) = output {
             match out {
-                    PipelineOutput::Gaze { left_eye: _, right_eye: _, yaw, pitch, roll: _ , vector: _, landmarks } => {
+                    PipelineOutput::Gaze { left_eye, right_eye, yaw, pitch, roll: _ , vector: _, landmarks } => {
                        
                         // Correct for Mirror Mode
                         let yaw = if mirror_mode { -yaw } else { yaw };
@@ -304,34 +304,32 @@ fn main() -> anyhow::Result<()> {
                              }
                         }
                         
-                         // 3. Gaze (Blue Ray) - Originates from Nose if available, else Center
+                         // 3. Gaze (Blue Ray) - Extend from Pupils
                         if show_gaze {
-                             let (cx, cy) = if let Some(l) = &landmarks {
-                                 if l.points.len() > 4 {
-                                     (l.points[4].x, l.points[4].y) // Nose Tip
-                                 } else {
-                                     (width as f32 / 2.0, height as f32 / 2.0)
-                                 }
-                             } else {
-                                 (width as f32 / 2.0, height as f32 / 2.0)
-                             };
-                             
-                             let len = config.defaults.head_pose_length * 1.5; // Gaze usually projects further
-                            let end_x = cx + (yaw.to_radians().sin() * len);
-                            let end_y = cy - (pitch.to_radians().sin() * len);
+                            let len = config.defaults.head_pose_length * 1.5;
                             
-                             let mut t = 0.0;
-                             while t < 1.0 {
-                                 let px = cx + (end_x - cx) * t;
-                                 let py = cy + (end_y - cy) * t;
-                                 let idx = (py as usize * width as usize + px as usize) * 3;
-                                 if idx + 2 < display_buffer.len() {
-                                      display_buffer[idx] = 0;
-                                      display_buffer[idx+1] = 255;
-                                      display_buffer[idx+2] = 255; // Cyan
-                                 }
-                                 t += 0.005;
-                             }
+                            // Define a closure to draw a ray
+                            let mut draw_ray = |start_x: f32, start_y: f32| {
+                                let end_x = start_x + (yaw.to_radians().sin() * len);
+                                let end_y = start_y - (pitch.to_radians().sin() * len);
+                                
+                                let mut t = 0.0;
+                                while t < 1.0 {
+                                    let px = start_x + (end_x - start_x) * t;
+                                    let py = start_y + (end_y - start_y) * t;
+                                    let idx = (py as usize * width as usize + px as usize) * 3;
+                                    if idx + 2 < display_buffer.len() {
+                                         display_buffer[idx] = 0;
+                                         display_buffer[idx+1] = 255;
+                                         display_buffer[idx+2] = 255; // Cyan
+                                    }
+                                    t += 0.005;
+                                }
+                            };
+
+                            // Draw from both eyes
+                            draw_ray(left_eye.x, left_eye.y);
+                            draw_ray(right_eye.x, right_eye.y);
                         }
                         
                         // Send data to overlay if enabled
