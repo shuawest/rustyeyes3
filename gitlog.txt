@@ -1,0 +1,251 @@
+commit 1c11d2c6bb756cf04a3185519f788dda7ba60945
+Author: Josh West <shuawest@gmail.com>
+Date:   Wed Dec 17 16:42:50 2025 -0500
+
+    docs: formalize comprehensive changelog from git history
+
+commit e040e71d398673f7fa18b07efe785da1a14d7c43
+Author: Josh West <shuawest@gmail.com>
+Date:   Wed Dec 17 16:34:00 2025 -0500
+
+    fix(sync): fix moondream overlay and gaze synchronization, add changelog
+
+commit 4b9a574966585116daa8a60f6d7e5c4533308632
+Author: Josh West <shuawest@gmail.com>
+Date:   Wed Dec 17 16:23:24 2025 -0500
+
+    fix(viz): buffer and display captured gaze (green dot) for comparison
+
+commit a36f3b3fe7bc644941099b65fb8212ed49f1608a
+Author: Josh West <shuawest@gmail.com>
+Date:   Wed Dec 17 16:00:15 2025 -0500
+
+    feat(font): add ttf support and sync to overlay, fix moondream freeze
+
+commit b3ce7164a9fdf8856b1457d89bfac57d4e413be9
+Author: Josh West <shuawest@gmail.com>
+Date:   Wed Dec 17 15:51:01 2025 -0500
+
+    fix(config): ensure config file persistence and defaults
+
+commit d9df9a1e932432379a2b503029aea4c3e3a502aa
+Author: Josh West <shuawest@gmail.com>
+Date:   Wed Dec 17 15:38:56 2025 -0500
+
+    feat(config): add font_family to configuration
+
+commit fbb707f284e8e67d248760c46b63b3df1ba43e56
+Author: Josh West <shuawest@gmail.com>
+Date:   Wed Dec 17 15:37:40 2025 -0500
+
+    feat(viz): implement pupil-based gaze vectors
+
+commit c83a338caec9bd8138511e70fc8eea0375ffc3e1
+Author: Josh West <shuawest@gmail.com>
+Date:   Wed Dec 17 15:35:06 2025 -0500
+
+    fix(viz): restore moondream feedback, fix gaze visibility, add tests
+
+commit 3a8f65b71c30541d92c15a37df6d864d8b5f5332
+Author: Josh West <shuawest@gmail.com>
+Date:   Wed Dec 17 15:28:57 2025 -0500
+
+    feat(viz): add configurable visual parameters and restore moondream drawing
+
+commit 61b573ffa006e6179a3b9a4755269571b318a41f
+Author: Josh West <shuawest@gmail.com>
+Date:   Wed Dec 17 15:22:20 2025 -0500
+
+    feat(config): implement config.json support for UI defaults
+
+commit ae8c542e39f29cb9b16d7583ebb9d6fb18066759
+Author: Josh West <shuawest@gmail.com>
+Date:   Wed Dec 17 15:18:45 2025 -0500
+
+    fix(gaze): invert yaw in mirror mode to match visual feedback
+
+commit e68b9ac5c8c0925f2da2ffac653cd830ab6951dd
+Author: Josh West <shuawest@gmail.com>
+Date:   Wed Dec 17 15:10:20 2025 -0500
+
+    fix: restore video feed and add mirror toggle
+
+commit 7600c20032b5c3e6b9b37c367fcea04702acd5d0
+Author: Josh West <shuawest@gmail.com>
+Date:   Wed Dec 17 15:03:31 2025 -0500
+
+    feat(ui): replace modes with modular toggles for mesh/pose/gaze
+
+commit 947be6015111822c43e33e1c15ea440a9d8eb19a
+Author: Josh West <shuawest@gmail.com>
+Date:   Wed Dec 17 14:40:45 2025 -0500
+
+    style(ui): double menu font size to match HUD request
+
+commit 37ad27128c42ed179c821da570f63705eb19964c
+Author: Josh West <shuawest@gmail.com>
+Date:   Wed Dec 17 14:34:16 2025 -0500
+
+    style(ui): use standard 5x7 font for crisp menu text
+
+commit c106dc4f724457cc537fa998784fcd553872cdba
+Author: Josh West <shuawest@gmail.com>
+Date:   Wed Dec 17 14:16:17 2025 -0500
+
+    style(ui): increase menu size and use high contrast colors
+
+commit 56fe999805aea7e8ceb89f25f1a7ec3616afbfcd
+Author: Josh West <shuawest@gmail.com>
+Date:   Wed Dec 17 14:06:37 2025 -0500
+
+    feat(ui): add visual menu to HUD with mode indicators
+
+commit c98e7fd741a40cff708e09213c4259c4183a7d5d
+Author: Josh West <shuawest@gmail.com>
+Date:   Wed Dec 17 13:57:54 2025 -0500
+
+    fix(moondream): restore visual indicator, add regression spec, and debug logging
+
+commit 8663235cf8dd9d30dfc86d61ebb04aee91506e78
+Author: Josh West <shuawest@gmail.com>
+Date:   Wed Dec 17 13:53:40 2025 -0500
+
+    fix(hud): scale crosshair coordinates to buffer size for drawing
+
+commit 5f1ce59698563f7eec6885282022c4e7a147078a
+Author: Josh West <shuawest@gmail.com>
+Date:   Wed Dec 17 12:46:50 2025 -0500
+
+    feat: add calibration feedback HUD with timestamp and last point
+
+commit 551aea6e76d88500d273c6de32230f8b54f6f56e
+Author: Josh West <shuawest@gmail.com>
+Date:   Wed Dec 17 12:42:34 2025 -0500
+
+    fix(calibration): strip landmarks from saved pipeline output
+
+commit 09682a3d0936033ab2870c48cdf23a41b694c39a
+Author: Josh West <shuawest@gmail.com>
+Date:   Wed Dec 17 12:41:30 2025 -0500
+
+    fix: restore Mode 7 (Moondream toggle) in controls and spec
+
+commit 24591badc46807d5c0ae05851cecc2d46a90848e
+Author: Josh West <shuawest@gmail.com>
+Date:   Wed Dec 17 12:36:41 2025 -0500
+
+    fix(build): remove double spawn call and suppress unused warnings
+
+commit 9519f687a629d7fee6ee3fd836f582148e2faebf
+Author: Josh West <shuawest@gmail.com>
+Date:   Wed Dec 17 12:33:38 2025 -0500
+
+    feat: add run.sh startup script and improve error messages
+
+commit 124673a0c6be5cbf9d615a767fd23cefb1c7ed82
+Author: Josh West <shuawest@gmail.com>
+Date:   Wed Dec 17 11:32:38 2025 -0500
+
+    feat: integrate asynchronous Moondream results into calibration data storage
+
+commit ddd06c0793de9a213595117c13387962bd6fc185
+Author: Josh West <shuawest@gmail.com>
+Date:   Wed Dec 17 10:57:58 2025 -0500
+
+    feat: Implement calibration types, manager, and integation
+
+commit 53c6693e7ba95199a94ddd8ac45d4d9a223a45ec
+Author: Josh West <shuawest@gmail.com>
+Date:   Wed Dec 17 10:20:18 2025 -0500
+
+    added moondream gaze detection prototype; started calibration;
+
+commit 3fb83d2f1988259a72640ef166a5d12e303787fb
+Author: Josh West <shuawest@gmail.com>
+Date:   Wed Dec 17 10:19:51 2025 -0500
+
+    added moondream gaze detection prototype; started calibration;
+
+commit 489d85dd6dfbeb9e65bb3ddeacb2eef0e786913e
+Author: Josh West <shuawest@gmail.com>
+Date:   Wed Dec 17 08:11:14 2025 -0500
+
+    feat: implement triple-cursor overlay with optimized channel handling
+    
+    - Add 5-corner HUD displaying real-time, captured, and Moondream gaze coordinates
+    - Implement channel draining to prevent queue lag (frame and result channels)
+    - Add low-pass filter (alpha=0.3) for gaze smoothing
+    - Reduce Moondream simulation delay from 2s to 0.5s for responsive updates
+    - Update HUD positioning to avoid menu bar overlap
+    - Document simulation status and architecture incompatibility with Moondream2
+    
+    Technical improvements:
+    - Frame channel: unbounded with worker-side drain logic
+    - Result channel: main-thread drain to display only latest prediction
+    - Prevents 60 FPS → 2 Hz mismatch lag accumulation
+    - Green dot now accurately trails blue dot with ~0.5s latency
+    
+    Specs updated:
+    - OVERLAY_SPEC.md: Added HUD layout, protocol, performance details
+    - CORE_SPEC.md: Documented Key 7 toggle and Moondream mode
+    - README.md: Added Key 7 to controls table
+
+commit c432c983f38db178f5d0d65098a16b8ea54ea7c0
+Author: Josh West <shuawest@gmail.com>
+Date:   Tue Dec 16 21:56:00 2025 -0500
+
+    Refactor specs: Move detailed requirements to specs/ directory
+
+commit befea92464e019e2fdfc5c43e1145a0c281a94b3
+Author: Josh West <shuawest@gmail.com>
+Date:   Tue Dec 16 20:26:25 2025 -0500
+
+    updated readme
+
+commit 7e954b87eb90b5850eae397e1d08b20f645c73dc
+Author: Josh West <shuawest@gmail.com>
+Date:   Tue Dec 16 20:22:32 2025 -0500
+
+    updated readme
+
+commit 94ea89bf617ade1396d37c5cdfcbda8189a4da85
+Author: Josh West <shuawest@gmail.com>
+Date:   Tue Dec 16 20:17:50 2025 -0500
+
+    updated readme
+
+commit 847b3517f0e4db050a2cb74be2853169b10ba56d
+Author: Josh West <shuawest@gmail.com>
+Date:   Tue Dec 16 19:54:35 2025 -0500
+
+    Implement Option 0: Combined Mesh+Gaze+Overlay and make default
+
+commit b7656239f35af7506258088c53ebe8abb6155af8
+Author: Josh West <shuawest@gmail.com>
+Date:   Tue Dec 16 19:50:42 2025 -0500
+
+    Migrate REQUIREMENTS to AGENTS.md
+
+commit cf92080b1efd00bbc8edad5975e67bb952c16d38
+Author: Josh West <shuawest@gmail.com>
+Date:   Tue Dec 16 19:48:26 2025 -0500
+
+    Update docs and fix overlay build for Rusty Eyes
+
+commit e66aaa6f9e332a18040b2f3c7cfd3d36c85ca92b
+Author: Josh West <joshoa@gmail.com>
+Date:   Tue Dec 16 19:22:26 2025 -0500
+
+    Implement Gaze Mouse Overlay using Swift Sidecar
+
+commit 23b9037a76f2349a93e560fcdc150e2b6d9a9a30
+Author: Josh West <joshoa@gmail.com>
+Date:   Tue Dec 16 17:10:46 2025 -0500
+
+    Add documentation and finalize Pupil Gaze pipeline
+
+commit 9cf024d7857e6b7a72990a1179163593ad185f5c
+Author: Josh West <joshoa@gmail.com>
+Date:   Tue Dec 16 17:05:57 2025 -0500
+
+    Initial commit: Camera Lister with Face Mesh, Pose, and Gaze tracking

@@ -7,90 +7,111 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
+### Documentation
 
-- **Changelog**: Restored and backfilled `CHANGELOG.md` from git history parameters (`e040e71`).
+- **`1c11d2c` - Formalize comprehensive changelog**:
+  - _Change_: Created detailed CHANGELOG.md and updated AGENTS.md.
+  - _Intent_: Establish a source of truth for project history to aid future AI agents in understanding the "why" behind architectural decisions.
 
-## [0.2.1] - 2025-12-17 (Gaze Synchronization & Fonts)
-
-### Added
-
-- **Configurable Fonts (`d9df9a1`, `a36f3b3`)**: Added `font_family` to `config.json` and implemented `ttf.rs` rendering.
-  - _Intent_: Allow users to customize the HUD appearance (e.g., matching OS sans-serif aesthetics) rather than being stuck with the pixelated bitmap font.
-- **Captured Gaze Visualization (`4b9a574`)**: Added "Green Dot" indicator for `Captured` gaze.
-  - _Intent_: Provide a stable "Ground Truth" visual that shows exactly where the user was looking when a Moondream frame was captured, allowing valid comparison with Moondream's "Gold" prediction.
-- **Screen Coordinates in HUD**: Added `SCREEN: x, y` stats.
-  - _Intent_: Enable direct numerical comparison between the main window's internal state and the Overlay's displayed coordinates.
-- **Pupil-Based Gaze Vectors (`fbb707f`)**: Implemented dual gaze vectors originating from pupil centers.
-  - _Intent_: Increase visualization accuracy by drawing rays from the actual eyes positions rather than a generic head center.
-
-### Changed
-
-- **Moondream Synchronization (`e040e71`)**: Moved pipeline processing _before_ Moondream dispatch.
-  - _Intent_: Eliminated 1-frame lag. Previously, "Captured" gaze was from frame N-1 while the image was frame N, causing spatial drift during head movement.
-- **Moondream Worker Channel (`a36f3b3`)**: Switched to `sync_channel(1)` with `try_send`.
-  - _Intent_: Prevented UI freezes (infinite queue memory pressure) when the Python worker was slower than the video feed.
-- **Visual Parameters (`3a8f65b`)**: Made mesh/gaze colors and sizes configurable in `config.json`.
-  - _Intent_: Allow visual customization without recompilation.
+## [0.2.2] - 2025-12-17 (Performance & Sync)
 
 ### Fixed
 
-- **Overlay Blank Data (`e040e71`)**: Added missing `update_moondream()` call.
-  - _Intent_: Fixed bug where Overlay showed `----` despite valid inference results.
-- **Config Persistence (`b3ce716`)**: Ensured `config.json` is created/updated with defaults on load.
-  - _Intent_: robustness against schema changes; ensures users always have a valid config file.
-
-## [0.2.0] - 2025-12-17 (UI & Configuration Overhaul)
-
-### Added
-
-- **Configuration System (`61b573f`)**: Implemented `config.rs` with `serde` serialization.
-  - _Intent_: Move hardcoded constants (colors, toggles, timeouts) into a user-editable file.
-- **Modular Toggles (`7600c20`)**: Replaced unified "Modes" with granular toggles (Mesh, Pose, Gaze, Mirror).
-  - _Intent_: Give users finer control over what is displayed (e.g., just Gaze, no Mesh).
-- **Visual Menu (`56fe999`)**: Added on-screen list of active toggles.
-  - _Intent_: Improve UX by showing current state without requiring rote memorization of keys.
-
-### Changed
-
-- **Menu Styling (`c106dc4`, `37ad271`, `947be60`)**: Increased font size and contrast.
-  - _Intent_: User feedback indicated headers were too small to read on high-res screens.
-- **Mirror Mode Logic (`e68b9ac`, `ae8c542`)**: Implemented Horizontal Flip and inverted Yaw for Gaze Ray.
-  - _Intent_: "Mirror Mode" is more intuitive for webcam usage. Inverting Yaw ensures the gaze ray points "into" the mirror correctly.
-
-## [0.1.1] - 2025-12-17 (Calibration & Overlay Polish)
+- **`e040e71` - Fix Moondream overlay and gaze synchronization**:
+  - _Change_: Reordered `main.rs` loop to run `pipeline.process()` _before_ dispatching the frame to the Moondream worker. Added missing `update_moondream()` call.
+  - _Intent_: Eliminated the 1-frame synchronization lag (33ms) between the camera frame and the recorded gaze coordinates. Previously, the "Captured" gaze (Green Dot) represented the _previous_ frame's gaze, causing visual drift during head movement.
+- **`a36f3b3` - Fix Moondream Freeze**:
+  - _Change_: Switched `tx_frame` channel from unbounded to `sync_channel(1)` with `try_send`.
+  - _Intent_: Prevented the main UI thread from freezing or stuttering. Previously, if the Python worker was slow, the unbounded channel would fill up with frames, causing memory pressure and potential blocking during allocation/GC.
 
 ### Added
 
-- **Calibration HUD (`5f1ce59`)**: Added status text for calibration capture.
-  - _Intent_: Provide feedback when a data point is collected.
-- **Moondream Visual Indicator (`c98e7fd`)**: Restored Gold Crosshair for Moondream results.
-  - _Intent_: Regression fix; the indicator was lost during refactors. Added `REGRESSION_TESTS.md` to prevent recurrence.
+- **`4b9a574` - Buffer and display captured gaze**:
+  - _Change_: Added "Green Dot" indicator corresponding to `Captured` gaze coords.
+  - _Intent_: Provide a stable "Ground Truth" visual for the user to compare against the "Gold Crosshair" (Moondream). This proves whether the drift is in the model or just temporal lag.
+
+## [0.2.1] - 2025-12-17 (Configuration & Visuals)
+
+### Added
+
+- **`d9df9a1` - Add `font_family` to configuration**:
+  - _Change_: Added `ui.font_family` field to `config.json` and logic to load it.
+  - _Intent_: Allow users to match the application's aesthetic to their OS (e.g., using "Calibri" or "Arial" instead of the default bitmap font).
+- **`fbb707f` - Implement pupil-based gaze vectors**:
+  - _Change_: Added secondary "Blue" gaze rays originating from pupil variance centers.
+  - _Intent_: Improve visual debugging of the geometric solver.
+- **`3a8f65b` - Configurable visual parameters**:
+  - _Change_: Exposed colors (Hex) and sizes (Pt) for mesh, gaze, and HUD in `config.json`.
+  - _Intent_: Enable users to visually tweak the HUD for visibility against different backgrounds (e.g., dark vs light rooms) without recompiling.
 
 ### Fixed
 
-- **HUD Scaling (`8663235`)**: Scaled crosshair coordinates by window/buffer ratio.
-  - _Intent_: Fixed misalignment where drawing used raw camera coords (1080p) on a smaller window (900p).
-- **Calibration Data (`551aea6`)**: Stripped heavy landmarks from saved JSON.
-  - _Intent_: Reduce file size of calibration datasets.
+- **`b3ce716` - Ensure config file persistence**:
+  - _Change_: Forced `config.json` to be instantiated with defaults if missing.
+  - _Intent_: Improving First-Run Experience (FRE) and ensuring stability.
+
+## [0.2.0] - 2025-12-17 (UI Overhaul)
+
+### Added
+
+- **`61b573f` - Implement config.json support**:
+  - _Change_: Created `config.rs` with Serde and lazy_static generic patterns.
+  - _Intent_: Decouple hardcoded "magic numbers" from the codebase, preparing for a user-distributable binary.
+- **`7600c20` - Modular toggles**:
+  - _Change_: Replaced mutually exclusive "Modes" (1,2,3) with additive boolean toggles.
+  - _Intent_: Allow composing visualizations (e.g., "Gaze + Mesh" or "Just Gaze"), giving the user finer control.
+- **`56fe999` - Visual Menu**:
+  - _Change_: Added a text-based HUD listing active keys `[1] MESH [ON]`.
+  - _Intent_: Improve discoverability of controls so users don't need to read the manual to know which keys do what.
+
+### Changed
+
+- **`ae8c542` - Invert yaw in mirror mode**:
+  - _Change_: Multiplied Yaw by -1 when Mirror Mode is active.
+  - _Intent_: Fixed a geometric bug where the Gaze Ray pointed "out" of the mirror instead of "into" it when the image was flipped.
+- **`e68b9ac` - Restore video feed & Mirror Toggle**:
+  - _Change_: Added horizontal flip logic.
+  - _Intent_: Standard webcam expectation (Mirroring) for easier hand-eye coordination.
+- **`947be60`, `37ad271`, `c106dc4` - Menu Styling**:
+  - _Change_: Updated font size `5x7` -> `Scale 2`.
+  - _Intent_: Fix legibility issues on high-DPI displays.
+
+## [0.1.1] - 2025-12-17 (Calibration & Polish)
+
+### Fixed
+
+- **`c98e7fd` - Restore Moondream visual indicator**:
+  - _Change_: Re-implemented the drawing of the Gold Crosshair.
+  - _Intent_: Regression fix. The indicator was lost during a previous refactor, making it impossible to verify if Moondream was working.
+- **`8663235` - Scale crosshair coordinates**:
+  - _Change_: Applied `buffer_width / window_width` scaling factor.
+  - _Intent_: Fixed misalignment where coordinates were accurate to the _camera_ (1080p) but drawn at wrong offsets on a _window_ (e.g., 900p).
+- **`551aea6` - Strip landmarks from saved data**:
+  - _Change_: Removed the 468-point mesh from the JSON saved to disk.
+  - _Intent_: Reduce disk usage per sample (from ~15KB to ~200B) for large datasets.
+
+### Added
+
+- **`5f1ce59` - Calibration Feedback HUD**:
+  - _Change_: Added "LAST CAPTURED: (x,y)" text to HUD.
+  - _Intent_: Provide confirmation to the user that their "Spacebar" press actually registered a data point.
 
 ## [0.1.0] - 2025-12-16 (Initial Release)
 
 ### Added
 
-- **Core Pipelines (`9cf024d`, `23b9037`)**:
-  - `FaceDetectionPipeline` (UltraFace).
-  - `FaceMeshPipeline` (468 landmarks).
-  - `PupilGazePipeline` (Darkest-pixel centroid).
-  - `MoondreamOracle` (Async VLM).
-- **Overlay Sidecar (`e66aaa6`, `489d85d`)**:
-  - Swift-based transparent window for cross-application cursors.
-  - Triple Cursor logic (Realtime, Moondream, Mouse).
-- **Control Script (`9519f68`)**: Added `run.sh` and `get_model.sh`.
-  - _Intent_: Simplified setup transparency.
-
-### Specs
-
-- **Specification Hierarchy (`c432c98`, `b765623`)**:
-  - `CORE_SPEC.md`, `CALIBRATION_SPEC.md`, `OVERLAY_SPEC.md`.
-  - _Intent_: Formalized requirements and architecture.
+- **`489d85d` - Triple-cursor overlay**:
+  - _Change_: Implemented the communication protocol between Rust and Swift.
+  - _Intent_: Allow the "Blue" (Realtime) and "Gold" (Moondream) cursors to exist over the OS desktop, enabling actual cursor control testing.
+- **`e66aaa6` - Gaze Mouse Overlay (Swift)**:
+  - _Change_: Initial commit of `overlay_sidecar.swift`.
+  - _Intent_: Create a transparent, click-through window for drawing cursors on macOS.
+- **`124673a` - Async Moondream Integration**:
+  - _Change_: Added `std::thread` spawning for the VLM model.
+  - _Intent_: Prevent the heavy (2-3s) inference of Moondream from blocking the 60FPS video loop.
+- **`23b9037` - Pupil Gaze Pipeline**:
+  - _Change_: Implemented blob tracking for pupils.
+  - _Intent_: The primary algorithmic innovation—using geometry rather than just ML for speed.
+- **`9cf024d` - Initial Commit**:
+  - _Change_: Scaffolding, `nokhwa` camera setup, `ort` bindings.
+  - _Intent_: Foundation of the project.
