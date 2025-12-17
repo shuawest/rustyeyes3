@@ -232,6 +232,9 @@ fn main() -> anyhow::Result<()> {
             match out {
                     PipelineOutput::Gaze { left_eye: _, right_eye: _, yaw, pitch, roll: _ , vector: _, landmarks } => {
                        
+                        // Correct for Mirror Mode
+                        let yaw = if mirror_mode { -yaw } else { yaw };
+
                         // 1. Face Mesh
                         if show_mesh {
                             if let Some(l) = landmarks {
