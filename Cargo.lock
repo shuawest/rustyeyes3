@@ -3153,6 +3153,7 @@ dependencies = [
  "nokhwa",
  "objc",
  "ort",
+ "regex",
  "serde",
  "serde_json",
  "thiserror 1.0.69",

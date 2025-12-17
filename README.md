@@ -32,12 +32,98 @@ AI acceleration - Use any accelerated runtime to use GPUs/NPUs/etcs on the local
   - **[5] Pupil Gaze**: Precision gaze tracking using Computer Vision pupil blob detection + Head Pose.
 - **📹 Camera Support**: Automatic enumeration and selection of USB/Built-in cameras.
 - **🪞 Digital Mirror**: Camera output is flipped horizontally by default, creating a natural "mirror" experience (looking left appears left on screen).
-  ...
-  Start the app (Camera index 0, Mirroring enabled by default):
+- **🔮 VLM Gaze Verification**: Moondream2 integration via Python sidecar for experimental AI-based gaze detection comparison.
 
-      ```bash
-      cargo run --release --bin rusty-eyes -- --cam-index 0
-      ```
+## Quick Start
+
+### Prerequisites
+
+1.  **Rust** (1.70+): Install from [rustup.rs](https://rustup.rs)
+2.  **Python 3.9+**: For Moondream2 VLM integration
+3.  **macOS**: Currently overlay requires macOS (Swift sidecar)
+
+### Setup
+
+**1. Clone and Build Rust Components:**
+
+```bash
+git clone https://github.com/shuawest/rustyeyes3.git
+cd rustyeyes3
+cargo build --release
+```
+
+**2. Setup Python Environment (for Moondream2):**
+
+```bash
+# Create virtual environment
+python3 -m venv venv
+
+# Install dependencies (~100MB download)
+./venv/bin/pip install -r scripts/requirements.txt
+```
+
+**3. Download Moondream2 Model (Optional but Recommended):**
+
+```bash
+# Pre-download model (~3.7GB, requires internet)
+./venv/bin/python3 scripts/download_moondream.py
+```
+
+**Why pre-download?**
+
+- Avoids 30-60 second delay on first run
+- Verify download succeeded before testing
+- Can download during setup, run app offline later
+
+**Note**: If skipped, model auto-downloads on first Moondream activation (press `7`).
+
+**4. Test Python Server (Optional):**
+
+```bash
+./scripts/test_server.sh
+```
+
+Expected output: JSON response with gaze analysis.
+
+### Running the Application
+
+**Basic Usage:**
+
+```bash
+cargo run --release
+```
+
+**With Custom Camera:**
+
+```bash
+cargo run --release -- --cam-index 1
+```
+
+### Operating the Application
+
+**Real-Time Gaze Tracking:**
+
+1.  Launch application (see above)
+2.  Press `5` - Activate **Pupil Gaze** (best accuracy)
+3.  Press `6` - Toggle **Overlay** (shows gaze cursors on screen)
+4.  Move your eyes - watch the Blue/Red cursor track your gaze!
+
+**Moondream VLM Comparison:**
+
+1.  Ensure overlay is active (press `6`)
+2.  Press `7` - Toggle **Moondream Mode**
+3.  Wait 2-5 seconds per inference
+4.  Watch three cursors:
+    - **Blue/Red**: Real-time ONNX gaze (60 FPS)
+    - **Green/White**: Captured snapshot at Moondream trigger
+    - **Cyan/Gold**: Moondream2 VLM prediction
+5.  Compare accuracy in console output
+
+**Overlay HUD:**
+
+- Shows coordinates in 5 locations (corners + center)
+- Real-time, Captured, and Moondream positions
+- Updated automatically as you look around
 
 ## Controls
 
@@ -53,9 +139,51 @@ AI acceleration - Use any accelerated runtime to use GPUs/NPUs/etcs on the local
 | **7**   | Toggle **Moondream Mode** (Calibration) |
 | **ESC** | Quit Application                        |
 
-## Requirements
+## Architecture
 
-See [AGENTS.md](AGENTS.md) for detailed specification.
+**Core Components:**
+
+1. **Rust Application** (`src/main.rs`): Camera capture, ONNX inference, overlay management
+2. **Python Server** (`scripts/moondream_server.py`): Moondream2 VLM for gaze prediction
+3. **Swift Overlay** (`src/overlay_sidecar.swift`): macOS transparent window with triple-cursor display
+
+**Communication:**
+
+- Rust ↔ Python: JSON over stdin/stdout (subprocess)
+- Rust ↔ Overlay: JSON over stdin (Swift subprocess)
+- All local, no network required
+
+## Troubleshooting
+
+**"Failed to spawn Python server":**
+
+- Ensure venv is created: `ls venv/bin/python3`
+- Reinstall dependencies: `./venv/bin/pip install -r scripts/requirements.txt`
+
+**Model download stuck:**
+
+- Check internet connection
+- Check disk space (~4GB free needed)
+- Manually download: Visit https://huggingface.co/vikhyatk/moondream2
+
+**Slow Moondream inference:**
+
+- Expected on CPU: 2-5 seconds per frame
+- GPU acceleration: Install PyTorch with CUDA support
+- Reduce frequency: Moondream is experimental, not real-time
+
+**Overlay not appearing:**
+
+- Ensure macOS permissions for Accessibility
+- Try toggling: Press `6` twice
+- Check console for Swift errors
+
+## Documentation
+
+- **[AGENTS.md](AGENTS.md)**: Complete specification and architecture
+- **[specs/CORE_SPEC.md](specs/CORE_SPEC.md)**: Core functionality specification
+- **[specs/OVERLAY_SPEC.md](specs/OVERLAY_SPEC.md)**: Overlay and HUD details
+- **[scripts/README.md](scripts/README.md)**: Python server documentation
 
 ## License
 

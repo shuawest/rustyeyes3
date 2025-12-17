@@ -2,6 +2,113 @@
 
 ## 1. Overview
 
+This document defines the calibration system for `rustyeyes3`. The goal is to map the raw output from the gaze models (FaceMesh ONNX and Moondream2) to actual screen coordinates.
+
+The system utilizes a **Hybrid Architecture**:
+
+1.  **Fast Path (Primary)**: Existing FaceMesh + Eye Blob tracking (Rust/ONNX). Runs at ~120FPS. Controls the cursor.
+2.  **Slow Path (Oracle)**: Moondream2 (Rust/Candle/Python). Runs at ~0.1FPS. Corrects the Fast Path.
+
+## 2. Methodology
+
+We will implement a **Data Collection & Regression** approach.
+
+1.  **Data Collection Mode**: User provides Ground Truth (GT) by clicking on specific points on the screen while looking at them.
+2.  **Dataset**: We collect triplets of `{Image, Screen_X_GT, Screen_Y_GT}`.
+3.  **Inference**: Run both models on the collected images to get `{Vector_ONNX, Vector_MD}`.
+4.  **Calibration**: Compute homography or polynomial regression matrices to map `Vector -> Screen`.
+
+## 3. Workflow
+
+### 3.1. Data Collection Mode (New)
+
+**Activation**: Key `9` toggles "Calibration Mode".
+
+**Interaction**:
+
+1.  User looks at a point on the screen.
+2.  User presses `SPACE` (or Mouse Click).
+3.  **System Action**:
+    - Get current Mouse Cursor Position $(X_{screen}, Y_{screen})$.
+    - Capture current Frame from Camera.
+    - Save Image to `calibration_data/img_{timestamp}.jpg`.
+    - Append record to `calibration_data/dataset.csv`: `timestamp, x_screen, y_screen`.
+    - Visual Feedback: Flash screen or play sound.
+
+### 3.2. Calibration Computation (Offline/Triggered)
+
+**Activation**: Key `0` (or dedicated key) triggers "Compute Calibration" (if data exists).
+
+**Process**:
+
+1.  Read `calibration_data/dataset.csv`.
+2.  For each row:
+    - Load `img_{timestamp}.jpg`.
+    - **Run ONNX Pipeline**: Extract `Landmarks` -> Compute Raw Gaze Vector $(Yaw, Pitch)$ or Eye Center Vector. Let's call this $V_{onnx}$.
+    - **Run Moondream Oracle**: Extract Gaze Point $(X_{md}, Y_{md})$ (Normalized). Let's call this $V_{md}$.
+3.  **Compute Mappings**:
+    - **ONNX Mapping**: Find matrix $M_{onnx}$ such that $M_{onnx} \times V_{onnx} \approx P_{screen}$.
+      - Likely a **Projective Transformation (Homography)** or **2nd Order Polynomial** since head pose/eye rotation is non-linear to screen planar coords.
+    - **Moondream Mapping**: Find matrix $M_{md}$ such that $M_{md} \times V_{md} \approx P_{screen}$.
+      - Moondream outputs normalized coords $(0..1, 0..1)$, so this might just be a simple Affine transform (Scale + Offset) or Homography to account for camera angle.
+4.  **Save Profile**:
+    - Save matrices/coefficients to `calibration.json`.
+
+### 3.3. Inference (Runtime)
+
+1.  **Load** `calibration.json` on startup.
+2.  **Fast Path**:
+    - $P_{raw} = \text{Pipeline}(Frame)$
+    - $P_{screen} = M_{onnx}(P_{raw})$
+    - Move Mouse to $P_{screen}$.
+3.  **Slow Path (Correction)**:
+    - Periodically run Moondream.
+    - $P_{md\_raw} = \text{Moondream}(Frame)$
+    - $P_{md\_screen} = M_{md}(P_{md\_raw})$
+    - _Drift Correction_: Compare $P_{md\_screen}$ with current average $P_{screen}$. Adjust offset if consistent drift detected.
+
+## 4. Implementation Details
+
+### 4.1. File Structure
+
+```
+rustyeyes3/
+├── calibration_data/      # Gitignored directory
+│   ├── dataset.csv
+│   └── img_123456789.jpg
+└── calibration.json       # Generated profile
+```
+
+### 4.2. CSV Format
+
+```csv
+timestamp,screen_x,screen_y
+1702934821,500,500
+1702934825,0,0
+...
+```
+
+### 4.3. Math
+
+We will start with a simple **Linear Regression** (Affine Transform) for robustness, then try Homography if accuracy is poor.
+$X_{screen} = a X_{raw} + b Y_{raw} + c$
+$Y_{screen} = d X_{raw} + e Y_{raw} + f$
+
+This requires at least 3 points (non-collinear). 9 points (3x3 grid) recommended.
+
+## 5. UI Changes
+
+- **Main Window**:
+  - Add status text: "Mode: Calibration (9)"
+  - When in Calibration mode: "Move mouse & Press SPACE to capture."
+  - Show count of captured points: "Captured: 5"
+
+## 6. Future Work
+
+- **Automatic Target Display**: Instead of user choosing points, app displays a red dot sequence. (Out of scope for now).
+
+## 1. Overview
+
 This feature introduces a "Gaze Calibration" system using the multimodal **Moondream2** model. While too slow for real-time cursor control (8-10s latency), Moondream2 serves as a "Ground Truth" oracle to correct the drift and offset of the high-speed (100FPS+) geometric/CV gaze tracking.
 
 ## 2. Architecture

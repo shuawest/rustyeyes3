@@ -1,5 +1,7 @@
+use serde::{Serialize, Deserialize};
+
 /// Represents a single 3D point
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
 pub struct Point3D {
     pub x: f32,
     pub y: f32,
@@ -34,6 +36,23 @@ impl Rect {
     }
 }
 
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CalibrationPoint {
+    pub timestamp: u64,
+    pub screen_x: f32,
+    pub screen_y: f32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct CalibrationProfile {
+    // Linear Regression Coefficients
+    // X_screen = c0 + c1*X_in + c2*Y_in
+    // Y_screen = c3 + c4*X_in + c5*Y_in
+    pub x_coeffs: Vec<f32>,
+    pub y_coeffs: Vec<f32>,
+}
+
 #[derive(Debug, Clone)]
 pub enum PipelineOutput {
     Landmarks(Landmarks),
@@ -51,3 +70,4 @@ pub enum PipelineOutput {
         landmarks: Option<Landmarks>,
     },
 }
+

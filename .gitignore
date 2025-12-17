@@ -10,6 +10,13 @@ target/
 *.onnx
 *.bin
 *.xml
+*.pt
+*.pth
+*.safetensors
+*.gz
+
+# Calibration Data
+calibration_data/
 
 # Editor/IDE
 .vscode/
@@ -21,3 +28,10 @@ target/
 *.log
 overlay_app
 overlay_app
+
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+.Python

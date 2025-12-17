@@ -11,6 +11,7 @@ mod head_pose;
 mod gaze;
 mod overlay;
 mod moondream;
+mod calibration;
 
 use args::Args;
 use camera::CameraSource;
@@ -18,6 +19,7 @@ use output::WindowOutput;
 use pipeline::Pipeline;
 use types::PipelineOutput;
 use overlay::OverlayWindow;
+use calibration::CalibrationManager;
 
 fn create_pipeline(name: &str) -> Box<dyn Pipeline> {
     match name {
@@ -60,8 +62,12 @@ fn main() -> anyhow::Result<()> {
     let mut window = WindowOutput::new("Rusty Eyes", width as usize, height as usize)?; // Added ?
     println!("Window created successfully.");
 
+    // Setup Calibration Manager
+    let mut calibration_manager = CalibrationManager::new("calibration_data")?;
+    let mut calibration_mode = false;
+
     println!("Starting Pipeline...");
-    println!("Controls: [0] Combined [1-3] Basic [4] Head Gaze [5] Pupil Gaze [6] Toggle Overlay");
+    println!("Controls: [0] Combined [1-3] Basic [4] Head Gaze [5] Pupil Gaze [6] Toggle Overlay [9] Calibration Mode");
 
     // State for Overlay
     let mut show_overlay = true;
@@ -78,6 +84,9 @@ fn main() -> anyhow::Result<()> {
     // Smoothing State
     let mut smooth_x = screen_w as f32 / 2.0;
     let mut smooth_y = screen_h as f32 / 2.0;
+    
+    // Mouse Interaction State
+    let mut mouse_down_prev = false;
 
     // --- MOONDREAM WORKER SETUP ---
     // Unbounded channel - worker will drain to get latest frame
@@ -145,7 +154,6 @@ fn main() -> anyhow::Result<()> {
              std::thread::sleep(std::time::Duration::from_millis(200)); // Debounce
         }
 
-
          // Milestone 1: Moondream Snapshot (Key 7)
          // Milestone 1 (Refined): Continuous Toggle (Key 7)
          if window.is_key_down(minifb::Key::Key7) {
@@ -154,6 +162,15 @@ fn main() -> anyhow::Result<()> {
              std::thread::sleep(std::time::Duration::from_millis(500)); // Debounce
          }
 
+         // Calibration Mode Toggle (Key 9)
+         if window.is_key_down(minifb::Key::Key9) {
+             calibration_mode = !calibration_mode;
+             println!("Calibration Mode: {}", if calibration_mode { "ON (Press SPACE to capture, 8 to compute)" } else { "OFF" });
+             std::thread::sleep(std::time::Duration::from_millis(500));
+         }
+
+         
+         
          // Capture or Reuse Frame
          let frame = if let Some(frozen) = &paused_frame {
              frozen.clone()
@@ -167,6 +184,44 @@ fn main() -> anyhow::Result<()> {
                  continue;
              }
          };
+
+         // CALIBRATION CAPTURE
+         if calibration_mode {
+             // Check for SPACE
+             if window.is_key_down(minifb::Key::Space) {
+                 if !mouse_down_prev {
+                     // Trigger Capture
+                     // Get Mouse Pos (Simulator or Real?)
+                     // Minifb doesn't give global mouse pos easily for window.
+                     // IMPORTANT: We need logic to get cursor pos.
+                     // For now, let's just assume center (user looks at center) OR
+                     // implement a "Click where looking" via window mouse events if window is fullscreen?
+                     // BUT, users look at *screen*, not just window.
+                     // For MVP: We will just save a point and maybe ask user to input?
+                     // BETTER MVP: We assume the user looks at the MOUSE CURSOR which they move.
+                     // getting global mouse from minifb is tricky.
+                     // Let's hardcode a sequence?
+                     // No, let's just use `window.get_mouse_pos(minifb::MouseMode::Pass)` which gives *relative* to window.
+                     
+                     if let Some((mx, my)) = window.get_mouse_pos(minifb::MouseMode::Pass) {
+                         let _ = calibration_manager.save_data_point(&frame, mx, my);
+                     } else {
+                         println!("Mouse not in window!");
+                     }
+                     mouse_down_prev = true;
+                 }
+             } else {
+                 mouse_down_prev = false;
+             }
+             
+             // Compute (Key 8)
+             if window.is_key_down(minifb::Key::Key8) {
+                 println!("Computing Calibration (Not Implemented in MVP yet, logic is placeholder)");
+                 // calibration_manager.compute_regression(...);
+                 std::thread::sleep(std::time::Duration::from_millis(500));
+             }
+         }
+
 
          // Process (Only run pipeline if not paused, or run on static frame?)
          // For now, let's run pipeline on the frame (realtime or frozen) so we see the red mesh match.
@@ -199,6 +254,9 @@ fn main() -> anyhow::Result<()> {
                            let raw_sx = cx - (yaw * gain_x);
                            let raw_sy = cy - (pitch * gain_y);
                            
+                           // APPLY CALIBRATION
+                           let (cal_sx, cal_sy) = calibration_manager.apply(raw_sx, raw_sy);
+
                            // Simple Smoothing (LPF)
                            // Initialize static or use window state? 
                            // For now, use a hacky "Option" or just overwrite if jump is too big?
@@ -210,8 +268,8 @@ fn main() -> anyhow::Result<()> {
                            // let mut smooth_x = screen_w as f32 / 2.0;
                            // let mut smooth_y = screen_h as f32 / 2.0;
                            
-                           smooth_x = smooth_x * 0.7 + raw_sx * 0.3;
-                           smooth_y = smooth_y * 0.7 + raw_sy * 0.3;
+                           smooth_x = smooth_x * 0.7 + cal_sx * 0.3;
+                           smooth_y = smooth_y * 0.7 + cal_sy * 0.3;
                            
                            let sx = smooth_x;
                            let sy = smooth_y;
@@ -406,3 +464,4 @@ fn main() -> anyhow::Result<()> {
 
     Ok(())
 }
+
