@@ -75,11 +75,17 @@ def main():
                         
                         if points and len(points) > 0:
                             # Got coordinates! Use first point
-                            x, y = points[0]
-                            response = f"COORDS:{x:.4f},{y:.4f}"
-                            log_debug(f"point() returned coordinates: ({x:.4f}, {y:.4f}) with prompt '{prompt}'")
-                            param_found = True
-                            break
+                            # Ensure we cast to float, as API might return strings/decimals
+                            try:
+                                x = float(points[0][0])
+                                y = float(points[0][1])
+                                response = f"COORDS:{x:.4f},{y:.4f}"
+                                log_debug(f"point() returned coordinates: ({x:.4f}, {y:.4f}) with prompt '{prompt}'")
+                                param_found = True
+                                break
+                            except (ValueError, TypeError) as cast_err:
+                                log_debug(f"Error casting coordinates: {points[0]} - {cast_err}")
+                                continue
                             
                     if not param_found:
                         # point() didn't return coordinates, fall back to query
