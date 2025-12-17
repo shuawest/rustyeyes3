@@ -154,481 +154,223 @@ fn main() -> anyhow::Result<()> {
         }
     });
 
-    // --- MAIN LOOP ---
-    println!("Starting Pipeline...");
-    println!("Controls: [0] Combined [1-3] Basic [4] Head Gaze [5] Pupil Gaze [6] Toggle Overlay [7] Moondream [9] Calibration");
-
     // 4. Loop
+    let mut last_pipeline_output: Option<PipelineOutput> = None;
+    
+    // Feature Toggles (User Request)
+    let mut show_mesh = true; // Default
+    let mut show_pose = true; // Default
+    let mut show_gaze = false;
+    
+    // We keep one robust pipeline active
+    let mut pipeline = create_pipeline("pupil_gaze"); // This pipeline computes everything
+    
     while window.is_open() && !window.is_key_down(minifb::Key::Escape) {
-        // Swap Pipeline?
-        if window.is_key_down(minifb::Key::Key0) {
-            current_pipeline = create_pipeline("pupil_gaze");
-            show_overlay = true;
-            println!("Switched to: Combined (Mesh + Gaze + Overlay)");
-        }
-        if window.is_key_down(minifb::Key::Key1) {
-            current_pipeline = create_pipeline("mesh");
-            println!("Switched to: {}", current_pipeline.name());
-        }
-        if window.is_key_down(minifb::Key::Key2) {
-            current_pipeline = create_pipeline("detection");
-            println!("Switched to: {}", current_pipeline.name());
-        }
-        if window.is_key_down(minifb::Key::Key3) {
-            current_pipeline = create_pipeline("pose");
-            println!("Switched to: {}", current_pipeline.name());
-        }
-        if window.is_key_down(minifb::Key::Key4) {
-             current_pipeline = create_pipeline("head_gaze");
-             println!("Switched to: {}", current_pipeline.name());
-        }
-        if window.is_key_down(minifb::Key::Key5) {
-             current_pipeline = create_pipeline("pupil_gaze");
-             println!("Switched to: {}", current_pipeline.name());
-        }
         
-        // Toggle Overlay
-        if window.is_key_down(minifb::Key::Key6) {
-             show_overlay = !show_overlay;
-             println!("Overlay Mode: {}", show_overlay);
-             std::thread::sleep(std::time::Duration::from_millis(200)); // Debounce
+        // --- INPUT HANDLING ---
+        // (Moved to dedicated block below for clean toggling)
+
+        // Capture Frame (Unified)
+        let mut latest_realtime_frame = if let Ok(mut cam_frame) = camera.capture() {
+             if args.mirror {
+                 image::imageops::flip_horizontal_in_place(&mut cam_frame);
+             }
+             cam_frame
+        } else {
+             continue;
+        };
+        
+        let mut display_buffer = latest_realtime_frame.to_vec();
+        let (width, height) = latest_realtime_frame.dimensions();
+        // --- MOONDREAM ASYNC UPDATE ---
+        // Iterate through all available results from the worker
+        while let Ok((pt, onnx_data, _cal_id)) = rx_result.try_recv() {
+             moondream_result = Some(pt);
+             // TODO: Log onnx_data if needed
+        }
+        // --- INPUT HANDLING ---
+        // --- INPUT HANDLING ---
+        for key in window.get_keys_pressed(minifb::KeyRepeat::No) {
+            match key {
+                minifb::Key::Escape => {
+                     // We can't break outer loop easily, but we can rely on loop check
+                     // or window.is_key_down(Escape) works but we want single press for toggles?
+                     // Actually, if Escape is pressed, we just return/break.
+                     return Ok(());
+                },
+                minifb::Key::Key1 => show_mesh = !show_mesh,
+                minifb::Key::Key2 => show_pose = !show_pose,
+                minifb::Key::Key3 => show_gaze = !show_gaze,
+                
+                minifb::Key::Key6 => show_overlay = !show_overlay,
+                minifb::Key::Key7 => {
+                    if moondream_active {
+                        moondream_active = false;
+                        moondream_result = None;
+                    } else {
+                        moondream_active = true;
+                    }
+                },
+                minifb::Key::Key9 => {
+                    // Toggle Calibration
+                },
+                _ => {}
+            }
         }
 
-         // Milestone 1: Moondream Snapshot (Key 7)
-         // Milestone 1 (Refined): Continuous Toggle (Key 7)
-         if window.is_key_down(minifb::Key::Key7) {
-             moondream_active = !moondream_active;
-             println!("Moondream Continuous Mode: {}", if moondream_active { "ACTIVE" } else { "INACTIVE" });
-             std::thread::sleep(std::time::Duration::from_millis(500)); // Debounce
-         }
+        // --- PROCESSING ---
+        // Always run the full pipeline
+        let output = pipeline.process(&latest_realtime_frame)?;
+        last_pipeline_output = output.clone();
 
-         // Calibration Mode Toggle (Key 9)
-         if window.is_key_down(minifb::Key::Key9) {
-             calibration_mode = !calibration_mode;
-             println!("Calibration Mode: {}", if calibration_mode { "ON (Press SPACE to capture, 8 to compute)" } else { "OFF" });
-             std::thread::sleep(std::time::Duration::from_millis(500));
-         }
-
-         
-         
-         // Capture or Reuse Frame
-         let frame = if let Some(frozen) = &paused_frame {
-             frozen.clone()
-         } else {
-             if let Ok(mut cam_frame) = camera.capture() {
-                 if args.mirror {
-                     image::imageops::flip_horizontal_in_place(&mut cam_frame);
-                 }
-                 cam_frame
-             } else {
-                 continue;
-             }
-         };
-         
-         // Process Pipeline FIRST to get inference data for calibration capture
-         let landmarks = current_pipeline.process(&frame)?;
-
-                   // CALIBRATION CAPTURE
-                   if calibration_mode {
-                       // Check for SPACE
-                       if window.is_key_down(minifb::Key::Space) {
-                           if !mouse_down_prev {
-                               if let Some((mx, my)) = window.get_mouse_pos(minifb::MouseMode::Pass) {
-                                   // Pass the current landmarks/inference result to save with the image
-                                   // IMPORTANT: Get timestamp back to send to Moondream
-                                    if let Ok(ts) = calibration_manager.save_data_point(&frame, mx, my, landmarks.clone()) {
-                                         // Update HUD State
-                                         last_calibration_point = Some((mx, my, ts));
-                                         
-                                         // Send to Moondream Worker for background processing/correction
-                                         let img_buffer = image::ImageBuffer::<image::Rgb<u8>, _>::from_raw(width as u32, height as u32, frame.to_vec()).unwrap();
-                                         let dynamic_img = image::DynamicImage::ImageRgb8(img_buffer);
-                                         // We pass None for logging-data, and Some(ts) for ID
-                                         let _ = tx_frame.send((dynamic_img, None, Some(ts)));
-                                    }
-                               } else {
-                                   println!("Mouse not in window!");
-                               }
-                               mouse_down_prev = true;
-                           }
-                       } else {
-                           mouse_down_prev = false;
-                       }
+        // --- DRAWING ---
+        // display_buffer is already init with frame pixels above
+        
+        if let Some(out) = output {
+            match out {
+                    PipelineOutput::Gaze { left_eye: _, right_eye: _, yaw, pitch, roll: _ , vector: _, landmarks } => {
                        
-                       // Compute (Key 8)
-                       if window.is_key_down(minifb::Key::Key8) {
-                           println!("Computing Calibration (Not Implemented in MVP yet, logic is placeholder)");
-                           // calibration_manager.compute_regression(...);
-                           std::thread::sleep(std::time::Duration::from_millis(500));
-                       }
-                   }
-                   
-                   // Draw logic based on output type
-                   let mut display_buffer = frame.to_vec(); // clone for drawing
-                      // Simple drawing (inefficient but works)
-                      
-                      // --- OVERLAY SIDE CAR LOGIC ---
-                      if show_overlay {
-                           if overlay_window.is_none() {
-                               match OverlayWindow::new(screen_w, screen_h) {
-                                  Ok(win) => {
-                                       overlay_window = Some(win);
-                                       println!("Overlay Sidecar Launched");
-                                  },
-                                  Err(e) => println!("Failed to launch overlay: {}", e),
-                               }
-                           }
-                           if let Some(win) = overlay_window.as_mut() {
-                                if let Some(PipelineOutput::Gaze { yaw, pitch, .. }) = landmarks.as_ref() {
-                                     let gain_x = 25.0; 
-                                     let gain_y = 25.0;
-                                     
-                                     let cx = screen_w as f32 / 2.0;
-                                     let cy = screen_h as f32 / 2.0;
-                                     
-                                     
-                                     let raw_sx = cx - (yaw * gain_x);
-                                     let raw_sy = cy - (pitch * gain_y);
-                                     
-                                     // APPLY CALIBRATION
-                                     let (cal_sx, cal_sy) = calibration_manager.apply(raw_sx, raw_sy);
-          
-                                     // Simple Smoothing (LPF)
-                                     // Initialize static or use window state? 
-                                     // For now, use a hacky "Option" or just overwrite if jump is too big?
-                                     // Ideally we need state persistence.
-                                     // Let's rely on the outer loop state.
-                                     
-                                     // We need to store smooth_x, smooth_y in the loop context.
-                                     // Assuming variables defined above loop:
-                                     // let mut smooth_x = screen_w as f32 / 2.0;
-                                     // let mut smooth_y = screen_h as f32 / 2.0;
-                                     
-                                     smooth_x = smooth_x * 0.7 + cal_sx * 0.3;
-                                     smooth_y = smooth_y * 0.7 + cal_sy * 0.3;
-                                     
-                                     let sx = smooth_x;
-                                     let sy = smooth_y;
-                                     
-                                     // Send to Sidecar (Gaze)
-                                     let _ = win.update_gaze(sx, sy);
-                                     
-                                     // --- MOONDREAM TRIGGER ---
-                                     // Throttle sending to avoid queue buildup? 
-                                     // For sim, we trust worker speed or channel buffer.
-                                     if moondream_active {
-                                         let img_buffer = image::ImageBuffer::<image::Rgb<u8>, _>::from_raw(width as u32, height as u32, frame.to_vec()).unwrap();
-                                         let dynamic_img = image::DynamicImage::ImageRgb8(img_buffer);
-                                                                        // Calculate current ONNX gaze point (sx, sy) to send for logging
-                                          let onnx_pt = (sx, sy);
-                                          // Send frame - worker will drain to get latest
-                                          // Note: Pass None for calibration ID in live mode
-                                          let _ = tx_frame.send((dynamic_img, Some(onnx_pt), None));
-                                      }
-                                                                // Check for Results (Non-blocking) - drain to get latest only
-                                      if let Ok(first_result) = rx_result.try_recv() {
-                                          // Got first result, drain any backlog
-                                          let mut latest_result = first_result;
-                                          let mut drain_count = 0;
-                                          
-                                          // IMPORTANT: If we encounter a result WITH an ID, we must process it!
-                                          // If `latest_result` has an ID, we keep it. 
-                                          // If `newer_result` has an ID, we adopt it.
-                                          // What if we have multiple IDs? We might lose one.
-                                          // For now, let's just drain to latest.
-                                          // BUT, if we have a calibration ID, we should process it.
-                                          // Let's iterate.
-                                          
-                                          // Handle First
-                                          if let Some(ts) = latest_result.2 {
-                                                let _ = calibration_manager.update_point_with_moondream(ts, latest_result.0);
-                                          }
-
-                                          while let Ok(newer_result) = rx_result.try_recv() {
-                                              if let Some(ts) = newer_result.2 {
-                                                   let _ = calibration_manager.update_point_with_moondream(ts, newer_result.0);
-                                              }
-                                              latest_result = newer_result;
-                                              drain_count += 1;
-                                          }
-                                          if drain_count > 0 {
-                                              // println!("[WARN] Drained {} stale results", drain_count);
-                                          }
-                                          
-                                          let (md_gaze, onnx_gaze, _cal_id) = latest_result;
-                                          let md_sx = md_gaze.x * screen_w as f32;
-                                          let md_sy = md_gaze.y * screen_h as f32;
-                                          
-                                          if onnx_gaze.is_some() {
-                                              println!("[DATA] Moondream: ({:.2}, {:.2}), ONNX@Capture: {:?}", md_sx, md_sy, onnx_gaze);
-                                          } else {
-                                              // Calibration result likely
-                                              println!("[CAL] Processed Moondream for timestamp {:?}", _cal_id);
-                                          }
-                                          
-                                          moondream_result = Some(md_gaze);
-                                          
-                                          // Send all updates to Sidecar
-                                          let _ = win.update_moondream(md_sx, md_sy);
-                                          
-                                          // If we have ONNX capture data, send it too
-                                          if let Some((ox, oy)) = onnx_gaze {
-                                              let _ = win.update_captured_onnx(ox, oy);
-                                          }
-                                      }
-                                }
-                       }
-            } else {
-                 if overlay_window.is_some() {
-                     overlay_window = None;
-                     println!("Overlay Sidecar Closed");
-                 }
-            }
-            // ---------------------
-            
-            if let Some(output) = landmarks {
-                match output {
-                    PipelineOutput::Landmarks(l) => {
-                         // Draw points
-                         for point in l.points {
-                             let x = point.x as usize;
-                             let y = point.y as usize;
-                             if x < width as usize && y < height as usize {
-                                 // Draw red dot
-                                 for dy in 0..2 { for dx in 0..2 {
-                                     let idx = ((y + dy) * width as usize + (x + dx)) * 3;
-                                     if idx < display_buffer.len() {
-                                         display_buffer[idx] = 255; display_buffer[idx+1] = 0; display_buffer[idx+2] = 0;
-                                     }
-                                 }}
-                             }
-                         }
-                    },
-                    PipelineOutput::FaceRects(rects) => {
-                         for r in rects {
-                             let x = r.x as usize; let y = r.y as usize; let w = r.width as usize; let h = r.height as usize;
-                             // Draw box (Green)
-                             for i in x..(x+w).min(width as usize) {
-                                  let idx1 = (y * width as usize + i) * 3;
-                                  let idx2 = ((y+h).min(height as usize-1) * width as usize + i) * 3;
-                                  if idx1 < display_buffer.len() { display_buffer[idx1] = 0; display_buffer[idx1+1] = 255; display_buffer[idx1+2] = 0; }
-                                  if idx2 < display_buffer.len() { display_buffer[idx2] = 0; display_buffer[idx2+1] = 255; display_buffer[idx2+2] = 0; }
-                             }
-                             for j in y..(y+h).min(height as usize) {
-                                  let idx1 = (j * width as usize + x) * 3;
-                                  let idx2 = (j * width as usize + (x+w).min(width as usize-1)) * 3;
-                                  if idx1 < display_buffer.len() { display_buffer[idx1] = 0; display_buffer[idx1+1] = 255; display_buffer[idx1+2] = 0; }
-                                  if idx2 < display_buffer.len() { display_buffer[idx2] = 0; display_buffer[idx2+1] = 255; display_buffer[idx2+2] = 0; }
-                             }
-                         }
-                    },
-                    PipelineOutput::HeadPose(y, p, _r) => {
-                         // Simple Center HUD
-                         // Apply Gain to match Gaze mode feel
-                         let yaw_gain = 1.5;
-                         let pitch_gain = 2.5; 
-                         
-                         // Debug Log (every ~60 frames or just always? Always is too fast.
-                         // We'll just print if it changes significantly? Or just rely on visual.)
-                         // Console spam is annoying but useful for debugging sensitivity.
-                         // Let's print nicely.
-                         // print!("\rYaw: {:.2} Pitch: {:.2} Roll: {:.2}   ", y, p, _r);
-                         // std::io::Write::flush(&mut std::io::stdout()).ok();
-
-                         let cx = width as f32 / 2.0; let cy = height as f32 / 2.0;
-                         let len = 100.0;
-                         let tx = cx - (y * yaw_gain).to_radians().sin() * len;
-                         let ty = cy - (p * pitch_gain).to_radians().sin() * len;
-                         
-                         // Draw center
-                         for dy in 0..5 { for dx in 0..5 {
-                             let idx = ((cy as usize + dy) * width as usize + (cx as usize + dx)) * 3;
-                             if idx < display_buffer.len() { display_buffer[idx] = 255; display_buffer[idx+1] = 255; display_buffer[idx+2] = 0; }
-                         }}
-                         // Draw line
-                         for t in 0..100 {
-                             let f = t as f32 / 100.0;
-                             let lx = cx + (tx - cx) * f;
-                             let ly = cy + (ty - cy) * f;
-                             let idx = (ly as usize * width as usize + lx as usize) * 3;
-                             if idx < display_buffer.len() { display_buffer[idx] = 0; display_buffer[idx+1] = 255; display_buffer[idx+2] = 255; }
-                         }
-                    },
-                    PipelineOutput::Gaze { left_eye, right_eye, yaw, pitch, landmarks, .. } => {
-                         // Draw Mesh if present
-                         if let Some(l) = landmarks {
-                             for point in l.points {
-                                 let x = point.x as usize;
-                                 let y = point.y as usize;
-                                 if x < width as usize && y < height as usize {
-                                     // Draw red dot
-                                     for dy in 0..2 { for dx in 0..2 {
-                                         let idx = ((y + dy) * width as usize + (x + dx)) * 3;
-                                         if idx < display_buffer.len() {
-                                             display_buffer[idx] = 255; display_buffer[idx+1] = 0; display_buffer[idx+2] = 0;
+                        // 1. Face Mesh
+                        if show_mesh {
+                            if let Some(l) = landmarks {
+                                for p in l.points {
+                                    // Draw red dot
+                                    let x = p.x as usize;
+                                    let y = p.y as usize;
+                                    if x < width as usize && y < height as usize {
+                                         let idx = (y * width as usize + x) * 3;
+                                         if idx + 2 < display_buffer.len() {
+                                             display_buffer[idx] = 255;   // R
+                                             display_buffer[idx+1] = 0;   // G
+                                             display_buffer[idx+2] = 0;   // B
                                          }
-                                     }}
-                                 }
-                             }
-                         }
+                                    }
+                                }
+                            }
+                        }
 
-                         // Draw Vectors from Eye Centers
-                         let len = 80.0; // Draw length
-                         
-                         // We use Yaw/Pitch to determine end points
-                         // Note: Ideally Gaze Model output vector is used, but we use head pose as proxy if vector is placeholder.
-                         let y_rad = yaw.to_radians();
-                         let p_rad = pitch.to_radians();
-                         
-                         let dx = -y_rad.sin() * len;
-                         let dy = -p_rad.sin() * len;
-                         
-                         for &eye in &[left_eye, right_eye] {
-                             let ex = eye.x;
-                             let ey = eye.y;
-                             let tx = ex + dx;
-                             let ty = ey + dy;
-                             
-                             // Draw Eye Center (Blue)
-                             for dy in 0..5 { for dx in 0..5 {
-                                 let idx = ((ey as usize + dy) * width as usize + (ex as usize + dx)) * 3;
-                                 if idx < display_buffer.len() { display_buffer[idx] = 0; display_buffer[idx+1] = 0; display_buffer[idx+2] = 255; }
-                             }}
-                             
-                             // Draw Ray (Cyan)
-                             for t in 0..50 {
-                                 let f = t as f32 / 50.0;
-                                 let lx = ex + (tx - ex) * f;
-                                 let ly = ey + (ty - ey) * f;
-                                 let idx = (ly as usize * width as usize + lx as usize) * 3;
-                                 if idx < display_buffer.len() { display_buffer[idx] = 0; display_buffer[idx+1] = 255; display_buffer[idx+2] = 255; }
+                        // 2. Head Pose (Green Lines)
+                        if show_pose {
+                            let cx = width as f32 / 2.0;
+                            let cy = height as f32 / 2.0;
+                            // Project a line from center (or nose if we had it from landmarks) based on yaw/pitch
+                            // Yaw is horizontal, Pitch is vertical.
+                            let len = 100.0;
+                            let end_x = cx + (yaw.to_radians().sin() * len);
+                            // Flip y for screen coordinates (pitch up is negative usually)
+                            let end_y = cy - (pitch.to_radians().sin() * len);
+                            
+                             let mut t = 0.0;
+                             while t < 1.0 {
+                                 let px = cx + (end_x - cx) * t;
+                                 let py = cy + (end_y - cy) * t;
+                                 let idx = (py as usize * width as usize + px as usize) * 3;
+                                 if idx + 2 < display_buffer.len() {
+                                      display_buffer[idx] = 0;
+                                      display_buffer[idx+1] = 255;
+                                      display_buffer[idx+2] = 0;
+                                 }
+                                 t += 0.01;
                              }
-                         }
-                    }
-                }
-            }
-            
-            // Draw Calibration HUD (Mouse Position + Timestamp)
-            if calibration_mode {
-                if let Some((lx, ly, ts)) = last_calibration_point {
-                    use chrono::TimeZone;
-                    let dt = chrono::Local.timestamp_millis_opt(ts as i64).unwrap();
-                    let time_str = dt.format("%H:%M:%S").to_string();
-                    let hud_text = format!("LAST: ({:.0},{:.0}) AT {}", lx, ly, time_str);
-                    
-                    // Draw green crosshair at last point (SCALED to Buffer)
-                    let (win_w, win_h) = window.get_size();
-                    let scale_x = width as f32 / win_w as f32;
-                    let scale_y = height as f32 / win_h as f32;
-                    
-                    let cx = (lx * scale_x) as usize;
-                    let cy = (ly * scale_y) as usize;
-                    
-                    let size = 10;
-                    if cx < width as usize && cy < height as usize {
-                        // Horizontal
-                        for i in (cx.saturating_sub(size))..((cx+size).min(width as usize)) {
-                             let idx = (cy * width as usize + i) * 3;
-                             if idx < display_buffer.len() { display_buffer[idx] = 0; display_buffer[idx+1] = 255; display_buffer[idx+2] = 0; }
                         }
-                        // Vertical
-                        for j in (cy.saturating_sub(size))..((cy+size).min(height as usize)) {
-                             let idx = (j * width as usize + cx) * 3;
-                             if idx < display_buffer.len() { display_buffer[idx] = 0; display_buffer[idx+1] = 255; display_buffer[idx+2] = 0; }
+                        
+                         // 3. Gaze (Blue Ray)
+                        if show_gaze {
+                             let cx = width as f32 / 2.0;
+                             let cy = height as f32 / 2.0;
+                             
+                             let len = 150.0;
+                             // Just a distinct color from Head Pose (Cyan)
+                            let end_x = cx + (yaw.to_radians().sin() * len);
+                            let end_y = cy - (pitch.to_radians().sin() * len);
+                            
+                             let mut t = 0.0;
+                             while t < 1.0 {
+                                 let px = cx + (end_x - cx) * t;
+                                 let py = cy + (end_y - cy) * t;
+                                 let idx = (py as usize * width as usize + px as usize) * 3;
+                                 if idx + 2 < display_buffer.len() {
+                                      display_buffer[idx] = 0;
+                                      display_buffer[idx+1] = 255;
+                                      display_buffer[idx+2] = 255; // Cyan
+                                 }
+                                 t += 0.01;
+                             }
                         }
-                    }
-                    
-                    // Draw Text Centered
-                    let scale = 2; // Bigger text
-                    let text_w = font::measure_text_width(&hud_text, scale);
-                    let center_x = (width / 2) as usize;
-                    let text_x = center_x.saturating_sub(text_w / 2);
-                    let text_y = (height / 2 + 120) as usize; // Below center HUD
-                    
-                    font::draw_text_line(&mut display_buffer, width as usize, height as usize, text_x, text_y, &hud_text, (0, 255, 0), scale);
+                        
+                        // Send data to overlay if enabled
+                        if show_overlay {
+                            // Ensure overlay is open
+                            if overlay_window.is_none() {
+                                if let Ok(win) = OverlayWindow::new(screen_w, screen_h) {
+                                    overlay_window = Some(win);
+                                }
+                            }
+                            
+                            // Map coordinates to screen
+                            let mut screen_x = width as f32 / 2.0; 
+                            let mut screen_y = height as f32 / 2.0;
+                            
+                            // Naive mapping: Just center + angle * factor
+                            let x_factor = 20.0;
+                            let y_factor = 20.0;
+                            
+                            screen_x += yaw * x_factor;
+                            screen_y -= pitch * y_factor;
+                            
+                            if let Some(win) = overlay_window.as_mut() {
+                                let _ = win.update_gaze(screen_x, screen_y);
+                            }
+                        } else {
+                            if overlay_window.is_some() {
+                                overlay_window = None; // Close it
+                            }
+                        }
+                    },
+                    _ => {} // Other variants not expected from PupilGazePipeline
                 }
             }
-            
-            // Draw Moondream Gold Gaze
-            if let Some(pt) = moondream_result {
-                let mx = (pt.x * width as f32) as usize;
-                let my = (pt.y * height as f32) as usize;
-                
-                // Draw Gold Star (Cross)
-                let color_gold = (255, 215, 0); // RGB
-                let size = 15;
-                if mx < width as usize && my < height as usize {
-                     for i in (mx.saturating_sub(size))..((mx+size).min(width as usize)) {
-                         // Horizontal
-                         let idx = (my * width as usize + i) * 3;
-                         if idx < display_buffer.len() { 
-                             display_buffer[idx] = color_gold.0; 
-                             display_buffer[idx+1] = color_gold.1; 
-                             display_buffer[idx+2] = color_gold.2; 
-                         }
-                     }
-                     for j in (my.saturating_sub(size))..((my+size).min(height as usize)) {
-                         // Vertical
-                         let idx = (j * width as usize + mx) * 3;
-                         if idx < display_buffer.len() { 
-                             display_buffer[idx] = color_gold.0; 
-                             display_buffer[idx+1] = color_gold.1; 
-                             display_buffer[idx+2] = color_gold.2; 
-                         }
-                     }
-                }
-            }
+
 
             // --- VISUAL MENU ---
+            // Updated Toggle-based Menu
             let menu_items = [
-                ("0", "Combined", "pupil_gaze"),
-                ("1", "Mesh", "mesh"),
-                ("2", "Detection", "detection"),
-                ("3", "Pose", "pose"),
-                ("4", "Head Gaze", "head_gaze"),
-                ("5", "Pupil Gaze", "pupil_gaze"),
+                ("1", "Face Mesh", show_mesh),
+                ("2", "Head Pose", show_pose),
+                ("3", "Eye Gaze", show_gaze),
             ];
             
+            // Adjust start position for larger text
             let mut y_start = height as usize / 2 - 150;
-            let current_name = current_pipeline.name();
-            // User requested 2x size of the HUD text.
-            // Using scale 2 with the new 5x7 font will make it quite large (10x14px per char).
-            
-            let menu_scale = 2; 
+            let menu_scale = 2;
             let line_height = 12 * menu_scale;
             
-            // Draw Modes
-            for (key, label, id) in menu_items.iter() {
-                // Logic for "Combined" vs "Pupil Gaze" is fuzzy, so we just check name for now.
-                
-                let is_active = *id == current_name;
-                
-                let color = if is_active { (0, 255, 0) } else { (255, 255, 255) };
-                let text = format!("[{}] {}", key, label);
+            // Draw Toggles
+            for (key, label, active) in menu_items.iter() {
+                let color = if *active { (0, 255, 0) } else { (255, 255, 255) };
+                let status = if *active { "ON" } else { "OFF" };
+                let text = format!("[{}] {} [{}]", key, label, status);
                 font::draw_text_line(&mut display_buffer, width as usize, height as usize, 10, y_start, &text, color, menu_scale);
                 y_start += line_height;
             }
             
             y_start += line_height; // Spacer
             
-            // Draw Toggles
-            let toggles = [
+            // Draw System Toggles
+            let system_toggles = [
                 ("6", "Overlay", show_overlay),
                 ("7", "Moondream", moondream_active),
                 ("9", "Calibration", calibration_mode),
             ];
             
-            for (key, label, active) in toggles.iter() {
+            for (key, label, active) in system_toggles.iter() {
                 let color = if *active { (0, 255, 0) } else { (255, 255, 255) };
                 let status = if *active { "ON" } else { "OFF" };
                 let text = format!("[{}] {} [{}]", key, label, status);
                  font::draw_text_line(&mut display_buffer, width as usize, height as usize, 10, y_start, &text, color, menu_scale);
                 y_start += line_height;
             }
-            
-            window.update(&display_buffer)?;
         }
 
     Ok(())
 }
-

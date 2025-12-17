@@ -45,6 +45,11 @@ impl WindowOutput {
     pub fn get_mouse_pos(&self, mode: minifb::MouseMode) -> Option<(f32, f32)> {
         self.window.get_mouse_pos(mode)
     }
+    
+    pub fn get_keys_pressed(&self, repeat: minifb::KeyRepeat) -> Vec<minifb::Key> {
+        self.window.get_keys_pressed(repeat)
+    }
+    
 
     pub fn get_size(&self) -> (usize, usize) {
         self.window.get_size()
