@@ -589,14 +589,18 @@ fn main() -> anyhow::Result<()> {
                 ("5", "Pupil Gaze", "pupil_gaze"),
             ];
             
-            // Adjust start position for larger text
             let mut y_start = height as usize / 2 - 150;
             let current_name = current_pipeline.name();
-            let menu_scale = 2;
-            let line_height = 14 * menu_scale; // 7px height * scale + padding
+            // User requested font matching the HUB.
+            // Using the new high-res 5x7 font at scale 1 gives a sharp look similar to the overlay.
+            
+            let menu_scale = 1; 
+            let line_height = 12 * menu_scale; // 8px font + padding
             
             // Draw Modes
             for (key, label, id) in menu_items.iter() {
+                // Logic for "Combined" vs "Pupil Gaze" is fuzzy, so we just check name for now.
+                
                 let is_active = *id == current_name;
                 
                 let color = if is_active { (0, 255, 0) } else { (255, 255, 255) };
