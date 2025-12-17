@@ -56,7 +56,7 @@ fn main() -> anyhow::Result<()> {
     // We get the actual format from the camera
     let width = camera.width();
     let height = camera.height();
-    let mut window = WindowOutput::new("Face Mesh Rust", width as usize, height as usize)?; // Added ?
+    let mut window = WindowOutput::new("Rusty Eyes", width as usize, height as usize)?; // Added ?
     println!("Window created successfully.");
 
     println!("Starting Pipeline...");

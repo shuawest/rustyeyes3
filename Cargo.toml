@@ -1,7 +1,8 @@
 [package]
-name = "camera-lister"
+name = "rusty-eyes"
 version = "0.1.0"
 edition = "2021"
+default-run = "rusty-eyes"
 
 [dependencies]
 nokhwa = { version = "0.10", features = [

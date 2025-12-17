@@ -286,24 +286,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b35204fbdc0b3f4446b89fc1ac2cf84a8a68971995d0bf2e925ec7cd960f9cb3"
 
 [[package]]
-name = "camera-lister"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "clap",
- "cocoa 0.24.1",
- "colored",
- "image",
- "minifb",
- "ndarray 0.15.6",
- "nokhwa",
- "objc",
- "ort",
- "thiserror 1.0.69",
- "tokio",
-]
-
-[[package]]
 name = "cc"
 version = "1.2.49"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2109,6 +2091,24 @@ name = "rustversion"
 version = "1.0.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b39cdef0fa800fc44525c84ccb54a029961a8215f9619753635a9c0d2538d46d"
+
+[[package]]
+name = "rusty-eyes"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "cocoa 0.24.1",
+ "colored",
+ "image",
+ "minifb",
+ "ndarray 0.15.6",
+ "nokhwa",
+ "objc",
+ "ort",
+ "thiserror 1.0.69",
+ "tokio",
+]
 
 [[package]]
 name = "schannel"
