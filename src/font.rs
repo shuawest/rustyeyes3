@@ -6,15 +6,19 @@
 // Wait, standard font is easier to read if I just use a simple logic.
 // Let's assume a fixed buffer drawing.
 
-pub fn draw_text_line(buffer: &mut [u8], width: usize, height: usize, x: usize, y: usize, text: &str, color: (u8, u8, u8)) {
+pub fn draw_text_line(buffer: &mut [u8], width: usize, height: usize, x: usize, y: usize, text: &str, color: (u8, u8, u8), scale: usize) {
     let mut cx = x;
     for c in text.chars() {
-        draw_char(buffer, width, height, cx, y, c, color);
-        cx += 4; // 3 width + 1 spacing
+        draw_char(buffer, width, height, cx, y, c, color, scale);
+        cx += (3 * scale) + scale; // 3 width + 1 spacing, scaled
     }
 }
 
-fn draw_char(buffer: &mut [u8], width: usize, height: usize, x: usize, y: usize, c: char, color: (u8, u8, u8)) {
+pub fn measure_text_width(text: &str, scale: usize) -> usize {
+    text.len() * ((3 * scale) + scale)
+}
+
+fn draw_char(buffer: &mut [u8], width: usize, height: usize, x: usize, y: usize, c: char, color: (u8, u8, u8), scale: usize) {
     // 3x5 font definition (compact)
     // Encoded as 5 integers, 3 bits each
     let map = match c.to_ascii_uppercase() {
@@ -46,6 +50,8 @@ fn draw_char(buffer: &mut [u8], width: usize, height: usize, x: usize, y: usize,
         ',' => [0x0, 0x0, 0x0, 0x2, 0x4],
         '(' => [0x2, 0x4, 0x4, 0x4, 0x2],
         ')' => [0x2, 0x1, 0x1, 0x1, 0x2],
+        '[' => [0x7, 0x4, 0x4, 0x4, 0x7], // Square bracket left
+        ']' => [0x7, 0x1, 0x1, 0x1, 0x7], // Square bracket right
         _ =>   [0x7, 0x7, 0x7, 0x7, 0x7], // block
     };
 
@@ -53,14 +59,19 @@ fn draw_char(buffer: &mut [u8], width: usize, height: usize, x: usize, y: usize,
         for col in 0..3 {
             // Check bit (column 0 is highest bit 2, col 2 is bit 0)
             if (bits >> (2 - col)) & 1 == 1 {
-                let px = x + col;
-                let py = y + row;
-                if px < width && py < height {
-                    let idx = (py * width + px) * 3;
-                    if idx + 2 < buffer.len() {
-                        buffer[idx] = color.0;
-                        buffer[idx+1] = color.1;
-                        buffer[idx+2] = color.2;
+                // Scaled drawing
+                for dy in 0..scale {
+                    for dx in 0..scale {
+                         let px = x + (col * scale) + dx;
+                         let py = y + (row * scale) + dy;
+                         if px < width && py < height {
+                             let idx = (py * width + px) * 3;
+                             if idx + 2 < buffer.len() {
+                                 buffer[idx] = color.0;
+                                 buffer[idx+1] = color.1;
+                                 buffer[idx+2] = color.2;
+                             }
+                         }
                     }
                 }
             }

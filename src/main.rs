@@ -538,8 +538,14 @@ fn main() -> anyhow::Result<()> {
                         }
                     }
                     
-                    // Draw Text
-                    font::draw_text_line(&mut display_buffer, width as usize, height as usize, 10, height as usize - 20, &hud_text, (0, 255, 0));
+                    // Draw Text Centered
+                    let scale = 2; // Bigger text
+                    let text_w = font::measure_text_width(&hud_text, scale);
+                    let center_x = (width / 2) as usize;
+                    let text_x = center_x.saturating_sub(text_w / 2);
+                    let text_y = (height / 2 + 120) as usize; // Below center HUD
+                    
+                    font::draw_text_line(&mut display_buffer, width as usize, height as usize, text_x, text_y, &hud_text, (0, 255, 0), scale);
                 }
             }
             
@@ -573,6 +579,51 @@ fn main() -> anyhow::Result<()> {
                 }
             }
 
+            // --- VISUAL MENU ---
+            let menu_items = [
+                ("0", "Combined", "pupil_gaze"), // Combined maps to pupil_gaze with overlay logic usually
+                ("1", "Mesh", "mesh"),
+                ("2", "Detection", "detection"),
+                ("3", "Pose", "pose"),
+                ("4", "Head Gaze", "head_gaze"),
+                ("5", "Pupil Gaze", "pupil_gaze"),
+            ];
+            
+            let mut y_start = height as usize / 2 - 100;
+            let current_name = current_pipeline.name();
+            
+            // Draw Modes
+            for (key, label, id) in menu_items.iter() {
+                // Logic for "Combined" vs "Pupil Gaze" is fuzzy, so we just check name for now.
+                // 0 -> Pupil Gaze + Overlay. 5 -> Pupil Gaze.
+                // If we are in pupil_gaze, we could highlight both 0 and 5? 
+                // Let's just highlight if exact ID match, except for combined which is ambiguous.
+                // Simplified: Just match ID.
+                let is_active = *id == current_name;
+                
+                let color = if is_active { (0, 255, 0) } else { (100, 100, 100) };
+                let text = format!("[{}] {}", key, label);
+                font::draw_text_line(&mut display_buffer, width as usize, height as usize, 10, y_start, &text, color, 1);
+                y_start += 12;
+            }
+            
+            y_start += 10; // Spacer
+            
+            // Draw Toggles
+            let toggles = [
+                ("6", "Overlay", show_overlay),
+                ("7", "Moondream", moondream_active),
+                ("9", "Calibration", calibration_mode),
+            ];
+            
+            for (key, label, active) in toggles.iter() {
+                let color = if *active { (0, 255, 0) } else { (100, 100, 100) };
+                let status = if *active { "ON" } else { "OFF" };
+                let text = format!("[{}] {} [{}]", key, label, status);
+                 font::draw_text_line(&mut display_buffer, width as usize, height as usize, 10, y_start, &text, color, 1);
+                y_start += 12;
+            }
+            
             window.update(&display_buffer)?;
         }
 
