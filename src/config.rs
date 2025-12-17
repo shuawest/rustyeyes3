@@ -14,15 +14,19 @@ pub struct Defaults {
     pub show_mesh: bool,
     pub show_pose: bool,
     pub show_gaze: bool,
-    pub show_overlay: bool,
     pub mirror_mode: bool,
+    pub show_overlay: bool,
     pub moondream_active: bool,
+    // New Params
+    pub head_pose_length: f32, 
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct UiConfig {
     pub menu_scale: usize,
-    pub font_size_pt: u32, // Placeholder if we move to TTF, currently scale is key
+    pub font_size_pt: u32,
+    pub mesh_dot_size: usize,
+    pub mesh_color_hex: String, // e.g. "#FF0000"
 }
 
 impl Default for AppConfig {
@@ -35,10 +39,13 @@ impl Default for AppConfig {
                 show_overlay: true,
                 mirror_mode: true,
                 moondream_active: false,
+                head_pose_length: 150.0, // Increased default
             },
             ui: UiConfig {
                 menu_scale: 2,
                 font_size_pt: 12,
+                mesh_dot_size: 2, // Larger default
+                mesh_color_hex: "#FF0000".to_string(),
             },
         }
     }

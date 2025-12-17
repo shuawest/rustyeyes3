@@ -244,16 +244,23 @@ fn main() -> anyhow::Result<()> {
                         // 1. Face Mesh
                         if show_mesh {
                             if let Some(l) = landmarks {
+                                let (mr, mg, mb) = parse_hex(&config.ui.mesh_color_hex);
+                                let dot_size = config.ui.mesh_dot_size;
+                                
                                 for p in l.points {
-                                    // Draw red dot
                                     let x = p.x as usize;
                                     let y = p.y as usize;
                                     if x < width as usize && y < height as usize {
-                                         let idx = (y * width as usize + x) * 3;
-                                         if idx + 2 < display_buffer.len() {
-                                             display_buffer[idx] = 255;   // R
-                                             display_buffer[idx+1] = 0;   // G
-                                             display_buffer[idx+2] = 0;   // B
+                                         // Draw Configurable Dot
+                                         for dy in 0..dot_size {
+                                             for dx in 0..dot_size {
+                                                 let idx = ((y + dy) * width as usize + (x + dx)) * 3;
+                                                 if idx + 2 < display_buffer.len() {
+                                                     display_buffer[idx] = mr;
+                                                     display_buffer[idx+1] = mg;
+                                                     display_buffer[idx+2] = mb;
+                                                 }
+                                             }
                                          }
                                     }
                                 }
@@ -264,11 +271,9 @@ fn main() -> anyhow::Result<()> {
                         if show_pose {
                             let cx = width as f32 / 2.0;
                             let cy = height as f32 / 2.0;
-                            // Project a line from center (or nose if we had it from landmarks) based on yaw/pitch
-                            // Yaw is horizontal, Pitch is vertical.
-                            let len = 100.0;
+                            
+                            let len = config.defaults.head_pose_length;
                             let end_x = cx + (yaw.to_radians().sin() * len);
-                            // Flip y for screen coordinates (pitch up is negative usually)
                             let end_y = cy - (pitch.to_radians().sin() * len);
                             
                              let mut t = 0.0;
@@ -281,17 +286,16 @@ fn main() -> anyhow::Result<()> {
                                       display_buffer[idx+1] = 255;
                                       display_buffer[idx+2] = 0;
                                  }
-                                 t += 0.01;
+                                 t += 0.005; // Finer grain for longer lines
                              }
                         }
                         
-                         // 3. Gaze (Blue Ray)
+                         // 3. Gaze (Blue Ray) - Same logic, maybe different color/length?
                         if show_gaze {
                              let cx = width as f32 / 2.0;
                              let cy = height as f32 / 2.0;
                              
-                             let len = 150.0;
-                             // Just a distinct color from Head Pose (Cyan)
+                             let len = config.defaults.head_pose_length * 1.5; // Gaze usually projects further
                             let end_x = cx + (yaw.to_radians().sin() * len);
                             let end_y = cy - (pitch.to_radians().sin() * len);
                             
@@ -305,7 +309,7 @@ fn main() -> anyhow::Result<()> {
                                       display_buffer[idx+1] = 255;
                                       display_buffer[idx+2] = 255; // Cyan
                                  }
-                                 t += 0.01;
+                                 t += 0.005;
                              }
                         }
                         
@@ -342,6 +346,47 @@ fn main() -> anyhow::Result<()> {
                 }
             }
 
+
+            // --- MOONDREAM TARGET ---
+            if let Some(pt) = moondream_result {
+                // If active or we have a sticky result?
+                // Let's draw if we have a result.
+                let mx = (pt.x * width as f32) as i32;
+                let my = (pt.y * height as f32) as i32;
+                
+                // Draw Gold Crosshair (Target)
+                let size = 20;
+                let thickness = 2;
+                let color = (255, 215, 0); // Gold
+                
+                for i in -size..=size {
+                    for t in -thickness..=thickness {
+                        // Horizontal
+                        let px = mx + i;
+                        let py = my + t;
+                        if px >= 0 && px < width as i32 && py >= 0 && py < height as i32 {
+                             let idx = (py as usize * width as usize + px as usize) * 3;
+                             if idx + 2 < display_buffer.len() {
+                                 display_buffer[idx] = color.0;
+                                 display_buffer[idx+1] = color.1;
+                                 display_buffer[idx+2] = color.2;
+                             }
+                        }
+                        
+                        // Vertical
+                        let px = mx + t;
+                        let py = my + i;
+                        if px >= 0 && px < width as i32 && py >= 0 && py < height as i32 {
+                             let idx = (py as usize * width as usize + px as usize) * 3;
+                             if idx + 2 < display_buffer.len() {
+                                 display_buffer[idx] = color.0;
+                                 display_buffer[idx+1] = color.1;
+                                 display_buffer[idx+2] = color.2;
+                             }
+                        }
+                    }
+                }
+            }
 
             // --- VISUAL MENU ---
             // Updated Toggle-based Menu
@@ -389,4 +434,15 @@ fn main() -> anyhow::Result<()> {
         }
 
     Ok(())
+}
+
+fn parse_hex(hex: &str) -> (u8, u8, u8) {
+    if hex.len() == 7 && hex.starts_with('#') {
+        let r = u8::from_str_radix(&hex[1..3], 16).unwrap_or(255);
+        let g = u8::from_str_radix(&hex[3..5], 16).unwrap_or(0);
+        let b = u8::from_str_radix(&hex[5..7], 16).unwrap_or(0);
+        (r, g, b)
+    } else {
+        (255, 0, 0) // Default Red
+    }
 }
