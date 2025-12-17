@@ -581,7 +581,7 @@ fn main() -> anyhow::Result<()> {
 
             // --- VISUAL MENU ---
             let menu_items = [
-                ("0", "Combined", "pupil_gaze"), // Combined maps to pupil_gaze with overlay logic usually
+                ("0", "Combined", "pupil_gaze"),
                 ("1", "Mesh", "mesh"),
                 ("2", "Detection", "detection"),
                 ("3", "Pose", "pose"),
@@ -589,25 +589,23 @@ fn main() -> anyhow::Result<()> {
                 ("5", "Pupil Gaze", "pupil_gaze"),
             ];
             
-            let mut y_start = height as usize / 2 - 100;
+            // Adjust start position for larger text
+            let mut y_start = height as usize / 2 - 150;
             let current_name = current_pipeline.name();
+            let menu_scale = 2;
+            let line_height = 14 * menu_scale; // 7px height * scale + padding
             
             // Draw Modes
             for (key, label, id) in menu_items.iter() {
-                // Logic for "Combined" vs "Pupil Gaze" is fuzzy, so we just check name for now.
-                // 0 -> Pupil Gaze + Overlay. 5 -> Pupil Gaze.
-                // If we are in pupil_gaze, we could highlight both 0 and 5? 
-                // Let's just highlight if exact ID match, except for combined which is ambiguous.
-                // Simplified: Just match ID.
                 let is_active = *id == current_name;
                 
-                let color = if is_active { (0, 255, 0) } else { (100, 100, 100) };
+                let color = if is_active { (0, 255, 0) } else { (255, 255, 255) };
                 let text = format!("[{}] {}", key, label);
-                font::draw_text_line(&mut display_buffer, width as usize, height as usize, 10, y_start, &text, color, 1);
-                y_start += 12;
+                font::draw_text_line(&mut display_buffer, width as usize, height as usize, 10, y_start, &text, color, menu_scale);
+                y_start += line_height;
             }
             
-            y_start += 10; // Spacer
+            y_start += line_height; // Spacer
             
             // Draw Toggles
             let toggles = [
@@ -617,11 +615,11 @@ fn main() -> anyhow::Result<()> {
             ];
             
             for (key, label, active) in toggles.iter() {
-                let color = if *active { (0, 255, 0) } else { (100, 100, 100) };
+                let color = if *active { (0, 255, 0) } else { (255, 255, 255) };
                 let status = if *active { "ON" } else { "OFF" };
                 let text = format!("[{}] {} [{}]", key, label, status);
-                 font::draw_text_line(&mut display_buffer, width as usize, height as usize, 10, y_start, &text, color, 1);
-                y_start += 12;
+                 font::draw_text_line(&mut display_buffer, width as usize, height as usize, 10, y_start, &text, color, menu_scale);
+                y_start += line_height;
             }
             
             window.update(&display_buffer)?;
