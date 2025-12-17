@@ -516,9 +516,14 @@ fn main() -> anyhow::Result<()> {
                     let time_str = dt.format("%H:%M:%S").to_string();
                     let hud_text = format!("LAST: ({:.0},{:.0}) AT {}", lx, ly, time_str);
                     
-                    // Draw green crosshair at last point
-                    let cx = lx as usize;
-                    let cy = ly as usize;
+                    // Draw green crosshair at last point (SCALED to Buffer)
+                    let (win_w, win_h) = window.get_size();
+                    let scale_x = width as f32 / win_w as f32;
+                    let scale_y = height as f32 / win_h as f32;
+                    
+                    let cx = (lx * scale_x) as usize;
+                    let cy = (ly * scale_y) as usize;
+                    
                     let size = 10;
                     if cx < width as usize && cy < height as usize {
                         // Horizontal
