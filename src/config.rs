@@ -25,6 +25,7 @@ pub struct Defaults {
 pub struct UiConfig {
     pub menu_scale: usize,
     pub font_size_pt: u32,
+    pub font_family: String, // New: Font Family (e.g. "Arial", "Terminus")
     pub mesh_dot_size: usize,
     pub mesh_color_hex: String, // e.g. "#FF0000"
 }
@@ -44,6 +45,7 @@ impl Default for AppConfig {
             ui: UiConfig {
                 menu_scale: 2,
                 font_size_pt: 12,
+                font_family: "Monospace".to_string(),
                 mesh_dot_size: 2, // Larger default
                 mesh_color_hex: "#FF0000".to_string(),
             },

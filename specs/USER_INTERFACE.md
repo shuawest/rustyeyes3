@@ -58,14 +58,20 @@ At startup, `rusty-eyes` looks for `config.json` in the current directory. If no
     "show_gaze": false,
     "show_overlay": true,
     "mirror_mode": true,
-    "moondream_active": false
+    "moondream_active": false,
+    "head_pose_length": 150.0
   },
   "ui": {
     "menu_scale": 2,
-    "font_size_pt": 12
+    "font_size_pt": 12,
+    "font_family": "Monospace",
+    "mesh_dot_size": 2,
+    "mesh_color_hex": "#FF0000"
   }
 }
 ```
+
+**\*Note**: `font_family` is currently just a configuration placeholder for external tools (Overlay) or future rendering updates. The internal HUD uses a built-in bitmap font.\*
 
 ### persistence
 
