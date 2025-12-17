@@ -48,11 +48,21 @@ impl CalibrationManager {
         let img = DynamicImage::ImageRgb8(frame.clone());
         img.save(&file_path)?;
 
+        // Sanitize inference data: Remove heavy landmarks, keep only direction/gaze
+        let sanitized_inference = if let Some(mut output) = inference {
+            if let PipelineOutput::Gaze { landmarks, .. } = &mut output {
+                *landmarks = None;
+            }
+            Some(output)
+        } else {
+            None
+        };
+
         let point = CalibrationPoint {
             timestamp,
             screen_x: x,
             screen_y: y,
-            inference,
+            inference: sanitized_inference,
             moondream_result: None,
         };
         
