@@ -591,11 +591,11 @@ fn main() -> anyhow::Result<()> {
             
             let mut y_start = height as usize / 2 - 150;
             let current_name = current_pipeline.name();
-            // User requested font matching the HUB.
-            // Using the new high-res 5x7 font at scale 1 gives a sharp look similar to the overlay.
+            // User requested 2x size of the HUD text.
+            // Using scale 2 with the new 5x7 font will make it quite large (10x14px per char).
             
-            let menu_scale = 1; 
-            let line_height = 12 * menu_scale; // 8px font + padding
+            let menu_scale = 2; 
+            let line_height = 12 * menu_scale;
             
             // Draw Modes
             for (key, label, id) in menu_items.iter() {
