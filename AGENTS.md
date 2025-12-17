@@ -86,6 +86,7 @@ The system shall support runtime-switchable pipelines:
 
 - **Windowing**: A native window displaying the video feed with overlaid graphics.
 - **Controls**:
+  - `0`: Switch to Combined Mode (Mesh + Gaze + Overlay) [Default].
   - `1-5`: Switch Pipelines instantaneously.
   - `6`: Toggle Overlay (macOS Only).
   - `ESC`: Quit application.

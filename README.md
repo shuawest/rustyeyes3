@@ -66,6 +66,7 @@
 
 | Key     | Function                                |
 | :------ | :-------------------------------------- |
+| **0**   | Switch to **Combined Mode** (Default)   |
 | **1**   | Switch to **Face Mesh**                 |
 | **2**   | Switch to **Face Detection**            |
 | **3**   | Switch to **Head Pose**                 |

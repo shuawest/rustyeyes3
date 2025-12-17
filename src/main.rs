@@ -49,7 +49,7 @@ fn main() -> anyhow::Result<()> {
     println!("Opened camera: {}", camera.name());
 
     // 2. Setup Inference
-    let mut current_pipeline = create_pipeline(&args.model.unwrap_or_else(|| "mesh".to_string()));
+    let mut current_pipeline = create_pipeline(&args.model.unwrap_or_else(|| "pupil_gaze".to_string()));
     println!("Active Pipeline: {}", current_pipeline.name());
 
     // 3. Setup Output
@@ -60,10 +60,10 @@ fn main() -> anyhow::Result<()> {
     println!("Window created successfully.");
 
     println!("Starting Pipeline...");
-    println!("Controls: [1-3] Basic [4] Head Gaze [5] Pupil Gaze [6] Toggle Overlay");
+    println!("Controls: [0] Combined [1-3] Basic [4] Head Gaze [5] Pupil Gaze [6] Toggle Overlay");
 
     // State for Overlay
-    let mut show_overlay = false;
+    let mut show_overlay = true;
     let mut overlay_window: Option<OverlayWindow> = None;
     let screen_w = 1440; // Default Mac, ideally get from OS but minifb doesn't support it easily.
     let screen_h = 900;
@@ -71,6 +71,11 @@ fn main() -> anyhow::Result<()> {
     // 4. Loop
     while window.is_open() && !window.is_key_down(minifb::Key::Escape) {
         // Swap Pipeline?
+        if window.is_key_down(minifb::Key::Key0) {
+            current_pipeline = create_pipeline("pupil_gaze");
+            show_overlay = true;
+            println!("Switched to: Combined (Mesh + Gaze + Overlay)");
+        }
         if window.is_key_down(minifb::Key::Key1) {
             current_pipeline = create_pipeline("mesh");
             println!("Switched to: {}", current_pipeline.name());
@@ -214,7 +219,24 @@ fn main() -> anyhow::Result<()> {
                              if idx < display_buffer.len() { display_buffer[idx] = 0; display_buffer[idx+1] = 255; display_buffer[idx+2] = 255; }
                          }
                     },
-                    PipelineOutput::Gaze { left_eye, right_eye, yaw, pitch, .. } => {
+                    PipelineOutput::Gaze { left_eye, right_eye, yaw, pitch, landmarks, .. } => {
+                         // Draw Mesh if present
+                         if let Some(l) = landmarks {
+                             for point in l.points {
+                                 let x = point.x as usize;
+                                 let y = point.y as usize;
+                                 if x < width as usize && y < height as usize {
+                                     // Draw red dot
+                                     for dy in 0..2 { for dx in 0..2 {
+                                         let idx = ((y + dy) * width as usize + (x + dx)) * 3;
+                                         if idx < display_buffer.len() {
+                                             display_buffer[idx] = 255; display_buffer[idx+1] = 0; display_buffer[idx+2] = 0;
+                                         }
+                                     }}
+                                 }
+                             }
+                         }
+
                          // Draw Vectors from Eye Centers
                          let len = 80.0; // Draw length
                          

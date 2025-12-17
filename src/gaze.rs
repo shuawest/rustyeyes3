@@ -59,7 +59,8 @@ impl Pipeline for SimulatedGazePipeline {
                  yaw: y * yaw_gain,
                  pitch: p * pitch_gain,
                  roll: r,
-                 vector: Point3D { x: 0.0, y: 0.0, z: 1.0 }
+                 vector: Point3D { x: 0.0, y: 0.0, z: 1.0 },
+                 landmarks: Some(l.clone()),
              }));
         }
         
@@ -201,7 +202,8 @@ impl Pipeline for PupilGazePipeline {
                  yaw: final_yaw,
                  pitch: final_pitch,
                  roll: r,
-                 vector: Point3D { x: 0.0, y: 0.0, z: 1.0 }
+                 vector: Point3D { x: 0.0, y: 0.0, z: 1.0 },
+                 landmarks: Some(l.clone()),
              }));
         }
         

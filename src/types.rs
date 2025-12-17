@@ -48,5 +48,6 @@ pub enum PipelineOutput {
         roll: f32,
         #[allow(dead_code)]
         vector: Point3D,
+        landmarks: Option<Landmarks>,
     },
 }
