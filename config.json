@@ -11,7 +11,7 @@
   "ui": {
     "menu_scale": 2,
     "font_size_pt": 12,
-    "font_family": "Calibri",
+    "font_family": "Geneva",
     "mesh_dot_size": 2,
     "mesh_color_hex": "#FF0000"
   }
