@@ -5,7 +5,7 @@ use std::path::Path;
 use std::io::Write;
 use serde::{Deserialize, Serialize};
 
-use crate::types::{CalibrationPoint, CalibrationProfile};
+use crate::types::{CalibrationPoint, CalibrationProfile, PipelineOutput};
 
 pub struct CalibrationManager {
     pub data_dir: String,
@@ -37,7 +37,7 @@ impl CalibrationManager {
         })
     }
 
-    pub fn save_data_point(&mut self, frame: &ImageBuffer<Rgb<u8>, Vec<u8>>, x: f32, y: f32) -> Result<()> {
+    pub fn save_data_point(&mut self, frame: &ImageBuffer<Rgb<u8>, Vec<u8>>, x: f32, y: f32, inference: Option<PipelineOutput>) -> Result<u64> {
         let timestamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)?
             .as_millis() as u64;
@@ -52,20 +52,52 @@ impl CalibrationManager {
             timestamp,
             screen_x: x,
             screen_y: y,
+            inference,
+            moondream_result: None,
         };
         
-        // Append to CSV
-        let csv_path = format!("{}/dataset.csv", self.data_dir);
-        let mut file = fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&csv_path)?;
-            
-        writeln!(file, "{},{},{}", timestamp, x, y)?;
+        
+        // Save JSON Metadata
+        let json_filename = format!("img_{}.json", timestamp);
+        let json_path = format!("{}/{}", self.data_dir, json_filename);
+        
+        let json_file = File::create(&json_path)?;
+        serde_json::to_writer_pretty(json_file, &point)?;
         
         self.data_buffer.push(point);
         println!("Saved Calibration Point: ({}, {})", x, y);
 
+        Ok(timestamp)
+    }
+
+    pub fn update_point_with_moondream(&mut self, timestamp: u64, result: crate::types::Point3D) -> Result<()> {
+        // 1. Find in buffer and update
+        if let Some(pt) = self.data_buffer.iter_mut().find(|p| p.timestamp == timestamp) {
+            pt.moondream_result = Some(result);
+            
+            // 2. Overwrite JSON file
+            let json_filename = format!("img_{}.json", timestamp);
+            let json_path = format!("{}/{}", self.data_dir, json_filename);
+            
+            let json_file = File::create(&json_path)?;
+            serde_json::to_writer_pretty(json_file, &pt)?;
+            println!("Updated Calibration Point {} with Moondream Data", timestamp);
+        } else {
+            // If not in buffer (e.g. restarted), try to load from disk?
+            // For now, MVP assumes session continuity.
+            // But we can try to blindly load-update-save.
+            let json_filename = format!("img_{}.json", timestamp);
+            let json_path = format!("{}/{}", self.data_dir, json_filename);
+            if Path::new(&json_path).exists() {
+                 let file = File::open(&json_path)?;
+                 let mut pt: CalibrationPoint = serde_json::from_reader(file)?;
+                 pt.moondream_result = Some(result);
+                 
+                 let json_file = File::create(&json_path)?;
+                 serde_json::to_writer_pretty(json_file, &pt)?;
+                 println!("Updated Calibration Point {} with Moondream Data (Disk)", timestamp);
+            }
+        }
         Ok(())
     }
     

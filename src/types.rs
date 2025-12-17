@@ -10,7 +10,7 @@ pub struct Point3D {
 }
 
 /// Represents the result of a face mesh inference
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Landmarks {
     pub points: Vec<Point3D>,
 }
@@ -22,7 +22,7 @@ impl Landmarks {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct Rect {
     pub x: f32,
     pub y: f32,
@@ -42,6 +42,8 @@ pub struct CalibrationPoint {
     pub timestamp: u64,
     pub screen_x: f32,
     pub screen_y: f32,
+    pub inference: Option<PipelineOutput>,
+    pub moondream_result: Option<Point3D>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -53,7 +55,7 @@ pub struct CalibrationProfile {
     pub y_coeffs: Vec<f32>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum PipelineOutput {
     Landmarks(Landmarks),
     FaceRects(Vec<Rect>),

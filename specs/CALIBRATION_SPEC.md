@@ -32,7 +32,7 @@ We will implement a **Data Collection & Regression** approach.
     - Get current Mouse Cursor Position $(X_{screen}, Y_{screen})$.
     - Capture current Frame from Camera.
     - Save Image to `calibration_data/img_{timestamp}.jpg`.
-    - Append record to `calibration_data/dataset.csv`: `timestamp, x_screen, y_screen`.
+    - Save Metadata to `calibration_data/img_{timestamp}.json` (JSON serialization of `CalibrationPoint`).
     - Visual Feedback: Flash screen or play sound.
 
 ### 3.2. Calibration Computation (Offline/Triggered)
@@ -79,13 +79,18 @@ rustyeyes3/
 └── calibration.json       # Generated profile
 ```
 
-### 4.2. CSV Format
+### 4.2. Data Format (JSON per sample)
 
-```csv
-timestamp,screen_x,screen_y
-1702934821,500,500
-1702934825,0,0
-...
+Instead of a single CSV, we save a JSON file alongside each image for easier atomic management.
+
+**File:** `img_{timestamp}.json`
+
+```json
+{
+  "timestamp": 1702934821,
+  "screen_x": 500.0,
+  "screen_y": 500.0
+}
 ```
 
 ### 4.3. Math

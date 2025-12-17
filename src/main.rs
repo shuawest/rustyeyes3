@@ -90,8 +90,10 @@ fn main() -> anyhow::Result<()> {
 
     // --- MOONDREAM WORKER SETUP ---
     // Unbounded channel - worker will drain to get latest frame
-    let (tx_frame, rx_frame) = std::sync::mpsc::channel::<(image::DynamicImage, Option<(f32, f32)>)>();
-    let (tx_result, rx_result) = std::sync::mpsc::channel::<(types::Point3D, Option<(f32, f32)>)>();
+    // Payload: (Image, OnnxGazeForLogging, CalibrationTimestampID)
+    let (tx_frame, rx_frame) = std::sync::mpsc::channel::<(image::DynamicImage, Option<(f32, f32)>, Option<u64>)>();
+    // Result: (MoondreamGaze, OnnxGazeForLogging, CalibrationTimestampID)
+    let (tx_result, rx_result) = std::sync::mpsc::channel::<(types::Point3D, Option<(f32, f32)>, Option<u64>)>();
     
     std::thread::spawn(move || {
         use moondream::MoondreamOracle;
@@ -100,16 +102,50 @@ fn main() -> anyhow::Result<()> {
         println!("Moondream Worker Started.");
         
         while let Ok(first_frame) = rx_frame.recv() {
-            // Got first frame, now drain any backlog to get the LATEST
-            let mut latest_frame = first_frame;
+            // Got first frame...
+            // Logic Change for Calibration: 
+            // If we have a backlog, we usually skip to latest. 
+            // BUT if there are calibration requests in the queue, we MUST process them?
+            // For simplicity, let's keep "Latest Frame" logic for live view, 
+            // but if a frame has a timestamp ID, we should prioritize/buffer it?
+            // Actually, for "Latest Frame" draining, we might lose a calibration frame if the user spams.
+            
+            // Revised Logic:
+            // Check if queue has any item with Some(id). If so, process that one.
+            // If multiple have ID, process all? Or just first?
+            // Given Moondream is slow (10s), we can't process a burst.
+            // But usually calibration is spaced out.
+            
+            // Simple approach: Drain, but if we encounter a frame with an ID, we STOP replacing `latest_frame` and use that one?
+            // Or just process every frame that has an ID?
+            
+            // Let's iterate the pending messages.
+            let mut priority_frame = if first_frame.2.is_some() { Some(first_frame.clone()) } else { None };
+            let mut latest_realtime_frame = first_frame;
+            
             while let Ok(newer_frame) = rx_frame.try_recv() {
-                latest_frame = newer_frame; // Keep replacing with newer
+                if newer_frame.2.is_some() {
+                     // We found a calibration frame!
+                     // If we already had one, we might be skipping the previous one. 
+                     // Ideally we process all calibration frames.
+                     // But for now, let's just take the LAST calibration frame if multiple, or simple queue?
+                     // Let's just hold onto it.
+                     priority_frame = Some(newer_frame.clone()); 
+                }
+                latest_realtime_frame = newer_frame;
             }
             
-            // Process only the latest frame
-            let (img, onnx_data) = latest_frame;
+            // Decide which to process
+            // If we have a priority frame, process it. Otherwise process latest realtime.
+            let (img, onnx_data, cal_id) = if let Some(p) = priority_frame {
+                p
+            } else {
+                latest_realtime_frame
+            };
+            
+            // Process
             if let Ok(gaze) = oracle.gaze_at(&img) {
-                let _ = tx_result.send((gaze, onnx_data));
+                let _ = tx_result.send((gaze, onnx_data, cal_id));
             }
         }
     });
@@ -184,141 +220,157 @@ fn main() -> anyhow::Result<()> {
                  continue;
              }
          };
-
-         // CALIBRATION CAPTURE
-         if calibration_mode {
-             // Check for SPACE
-             if window.is_key_down(minifb::Key::Space) {
-                 if !mouse_down_prev {
-                     // Trigger Capture
-                     // Get Mouse Pos (Simulator or Real?)
-                     // Minifb doesn't give global mouse pos easily for window.
-                     // IMPORTANT: We need logic to get cursor pos.
-                     // For now, let's just assume center (user looks at center) OR
-                     // implement a "Click where looking" via window mouse events if window is fullscreen?
-                     // BUT, users look at *screen*, not just window.
-                     // For MVP: We will just save a point and maybe ask user to input?
-                     // BETTER MVP: We assume the user looks at the MOUSE CURSOR which they move.
-                     // getting global mouse from minifb is tricky.
-                     // Let's hardcode a sequence?
-                     // No, let's just use `window.get_mouse_pos(minifb::MouseMode::Pass)` which gives *relative* to window.
-                     
-                     if let Some((mx, my)) = window.get_mouse_pos(minifb::MouseMode::Pass) {
-                         let _ = calibration_manager.save_data_point(&frame, mx, my);
-                     } else {
-                         println!("Mouse not in window!");
-                     }
-                     mouse_down_prev = true;
-                 }
-             } else {
-                 mouse_down_prev = false;
-             }
-             
-             // Compute (Key 8)
-             if window.is_key_down(minifb::Key::Key8) {
-                 println!("Computing Calibration (Not Implemented in MVP yet, logic is placeholder)");
-                 // calibration_manager.compute_regression(...);
-                 std::thread::sleep(std::time::Duration::from_millis(500));
-             }
-         }
-
-
-         // Process (Only run pipeline if not paused, or run on static frame?)
-         // For now, let's run pipeline on the frame (realtime or frozen) so we see the red mesh match.
-         let landmarks = current_pipeline.process(&frame)?;
          
-         // Draw logic based on output type
-         let mut display_buffer = frame.to_vec(); // clone for drawing
-            // Simple drawing (inefficient but works)
-            
-            // --- OVERLAY SIDE CAR LOGIC ---
-            if show_overlay {
-                 if overlay_window.is_none() {
-                     match OverlayWindow::new(screen_w, screen_h) {
-                        Ok(win) => {
-                             overlay_window = Some(win);
-                             println!("Overlay Sidecar Launched");
-                        },
-                        Err(e) => println!("Failed to launch overlay: {}", e),
-                     }
-                 }
-                 if let Some(win) = overlay_window.as_mut() {
-                      if let Some(PipelineOutput::Gaze { yaw, pitch, .. }) = landmarks.as_ref() {
-                           let gain_x = 25.0; 
-                           let gain_y = 25.0;
-                           
-                           let cx = screen_w as f32 / 2.0;
-                           let cy = screen_h as f32 / 2.0;
-                           
-                           
-                           let raw_sx = cx - (yaw * gain_x);
-                           let raw_sy = cy - (pitch * gain_y);
-                           
-                           // APPLY CALIBRATION
-                           let (cal_sx, cal_sy) = calibration_manager.apply(raw_sx, raw_sy);
+         // Process Pipeline FIRST to get inference data for calibration capture
+         let landmarks = current_pipeline.process(&frame)?;
 
-                           // Simple Smoothing (LPF)
-                           // Initialize static or use window state? 
-                           // For now, use a hacky "Option" or just overwrite if jump is too big?
-                           // Ideally we need state persistence.
-                           // Let's rely on the outer loop state.
-                           
-                           // We need to store smooth_x, smooth_y in the loop context.
-                           // Assuming variables defined above loop:
-                           // let mut smooth_x = screen_w as f32 / 2.0;
-                           // let mut smooth_y = screen_h as f32 / 2.0;
-                           
-                           smooth_x = smooth_x * 0.7 + cal_sx * 0.3;
-                           smooth_y = smooth_y * 0.7 + cal_sy * 0.3;
-                           
-                           let sx = smooth_x;
-                           let sy = smooth_y;
-                           
-                           // Send to Sidecar (Gaze)
-                           let _ = win.update_gaze(sx, sy);
-                           
-                           // --- MOONDREAM TRIGGER ---
-                           // Throttle sending to avoid queue buildup? 
-                           // For sim, we trust worker speed or channel buffer.
-                           if moondream_active {
-                               let img_buffer = image::ImageBuffer::<image::Rgb<u8>, _>::from_raw(width as u32, height as u32, frame.to_vec()).unwrap();
-                               let dynamic_img = image::DynamicImage::ImageRgb8(img_buffer);
-                                                              // Calculate current ONNX gaze point (sx, sy) to send for logging
-                                let onnx_pt = (sx, sy);
-                                // Send frame - worker will drain to get latest
-                                let _ = tx_frame.send((dynamic_img, Some(onnx_pt)));
-                            }
-                                                      // Check for Results (Non-blocking) - drain to get latest only
-                            if let Ok(first_result) = rx_result.try_recv() {
-                                // Got first result, drain any backlog
-                                let mut latest_result = first_result;
-                                let mut drain_count = 0;
-                                while let Ok(newer_result) = rx_result.try_recv() {
-                                    latest_result = newer_result;
-                                    drain_count += 1;
+                   // CALIBRATION CAPTURE
+                   if calibration_mode {
+                       // Check for SPACE
+                       if window.is_key_down(minifb::Key::Space) {
+                           if !mouse_down_prev {
+                               if let Some((mx, my)) = window.get_mouse_pos(minifb::MouseMode::Pass) {
+                                   // Pass the current landmarks/inference result to save with the image
+                                   // IMPORTANT: Get timestamp back to send to Moondream
+                                   if let Ok(ts) = calibration_manager.save_data_point(&frame, mx, my, landmarks.clone()) {
+                                        // Send to Moondream Worker for background processing/correction
+                                        let img_buffer = image::ImageBuffer::<image::Rgb<u8>, _>::from_raw(width as u32, height as u32, frame.to_vec()).unwrap();
+                                        let dynamic_img = image::DynamicImage::ImageRgb8(img_buffer);
+                                        // We pass None for logging-data, and Some(ts) for ID
+                                        let _ = tx_frame.send((dynamic_img, None, Some(ts)));
+                                   }
+                               } else {
+                                   println!("Mouse not in window!");
+                               }
+                               mouse_down_prev = true;
+                           }
+                       } else {
+                           mouse_down_prev = false;
+                       }
+                       
+                       // Compute (Key 8)
+                       if window.is_key_down(minifb::Key::Key8) {
+                           println!("Computing Calibration (Not Implemented in MVP yet, logic is placeholder)");
+                           // calibration_manager.compute_regression(...);
+                           std::thread::sleep(std::time::Duration::from_millis(500));
+                       }
+                   }
+                   
+                   // Draw logic based on output type
+                   let mut display_buffer = frame.to_vec(); // clone for drawing
+                      // Simple drawing (inefficient but works)
+                      
+                      // --- OVERLAY SIDE CAR LOGIC ---
+                      if show_overlay {
+                           if overlay_window.is_none() {
+                               match OverlayWindow::new(screen_w, screen_h) {
+                                  Ok(win) => {
+                                       overlay_window = Some(win);
+                                       println!("Overlay Sidecar Launched");
+                                  },
+                                  Err(e) => println!("Failed to launch overlay: {}", e),
+                               }
+                           }
+                           if let Some(win) = overlay_window.as_mut() {
+                                if let Some(PipelineOutput::Gaze { yaw, pitch, .. }) = landmarks.as_ref() {
+                                     let gain_x = 25.0; 
+                                     let gain_y = 25.0;
+                                     
+                                     let cx = screen_w as f32 / 2.0;
+                                     let cy = screen_h as f32 / 2.0;
+                                     
+                                     
+                                     let raw_sx = cx - (yaw * gain_x);
+                                     let raw_sy = cy - (pitch * gain_y);
+                                     
+                                     // APPLY CALIBRATION
+                                     let (cal_sx, cal_sy) = calibration_manager.apply(raw_sx, raw_sy);
+          
+                                     // Simple Smoothing (LPF)
+                                     // Initialize static or use window state? 
+                                     // For now, use a hacky "Option" or just overwrite if jump is too big?
+                                     // Ideally we need state persistence.
+                                     // Let's rely on the outer loop state.
+                                     
+                                     // We need to store smooth_x, smooth_y in the loop context.
+                                     // Assuming variables defined above loop:
+                                     // let mut smooth_x = screen_w as f32 / 2.0;
+                                     // let mut smooth_y = screen_h as f32 / 2.0;
+                                     
+                                     smooth_x = smooth_x * 0.7 + cal_sx * 0.3;
+                                     smooth_y = smooth_y * 0.7 + cal_sy * 0.3;
+                                     
+                                     let sx = smooth_x;
+                                     let sy = smooth_y;
+                                     
+                                     // Send to Sidecar (Gaze)
+                                     let _ = win.update_gaze(sx, sy);
+                                     
+                                     // --- MOONDREAM TRIGGER ---
+                                     // Throttle sending to avoid queue buildup? 
+                                     // For sim, we trust worker speed or channel buffer.
+                                     if moondream_active {
+                                         let img_buffer = image::ImageBuffer::<image::Rgb<u8>, _>::from_raw(width as u32, height as u32, frame.to_vec()).unwrap();
+                                         let dynamic_img = image::DynamicImage::ImageRgb8(img_buffer);
+                                                                        // Calculate current ONNX gaze point (sx, sy) to send for logging
+                                          let onnx_pt = (sx, sy);
+                                          // Send frame - worker will drain to get latest
+                                          // Note: Pass None for calibration ID in live mode
+                                          let _ = tx_frame.send((dynamic_img, Some(onnx_pt), None));
+                                      }
+                                                                // Check for Results (Non-blocking) - drain to get latest only
+                                      if let Ok(first_result) = rx_result.try_recv() {
+                                          // Got first result, drain any backlog
+                                          let mut latest_result = first_result;
+                                          let mut drain_count = 0;
+                                          
+                                          // IMPORTANT: If we encounter a result WITH an ID, we must process it!
+                                          // If `latest_result` has an ID, we keep it. 
+                                          // If `newer_result` has an ID, we adopt it.
+                                          // What if we have multiple IDs? We might lose one.
+                                          // For now, let's just drain to latest.
+                                          // BUT, if we have a calibration ID, we should process it.
+                                          // Let's iterate.
+                                          
+                                          // Handle First
+                                          if let Some(ts) = latest_result.2 {
+                                                let _ = calibration_manager.update_point_with_moondream(ts, latest_result.0);
+                                          }
+
+                                          while let Ok(newer_result) = rx_result.try_recv() {
+                                              if let Some(ts) = newer_result.2 {
+                                                   let _ = calibration_manager.update_point_with_moondream(ts, newer_result.0);
+                                              }
+                                              latest_result = newer_result;
+                                              drain_count += 1;
+                                          }
+                                          if drain_count > 0 {
+                                              // println!("[WARN] Drained {} stale results", drain_count);
+                                          }
+                                          
+                                          let (md_gaze, onnx_gaze, _cal_id) = latest_result;
+                                          let md_sx = md_gaze.x * screen_w as f32;
+                                          let md_sy = md_gaze.y * screen_h as f32;
+                                          
+                                          if onnx_gaze.is_some() {
+                                              println!("[DATA] Moondream: ({:.2}, {:.2}), ONNX@Capture: {:?}", md_sx, md_sy, onnx_gaze);
+                                          } else {
+                                              // Calibration result likely
+                                              println!("[CAL] Processed Moondream for timestamp {:?}", _cal_id);
+                                          }
+                                          
+                                          moondream_result = Some(md_gaze);
+                                          
+                                          // Send all updates to Sidecar
+                                          let _ = win.update_moondream(md_sx, md_sy);
+                                          
+                                          // If we have ONNX capture data, send it too
+                                          if let Some((ox, oy)) = onnx_gaze {
+                                              let _ = win.update_captured_onnx(ox, oy);
+                                          }
+                                      }
                                 }
-                                if drain_count > 0 {
-                                    println!("[WARN] Drained {} stale results", drain_count);
-                                }
-                                
-                                let (md_gaze, onnx_gaze) = latest_result;
-                                let md_sx = md_gaze.x * screen_w as f32;
-                                let md_sy = md_gaze.y * screen_h as f32;
-                                
-                                println!("[DATA] Moondream: ({:.2}, {:.2}), ONNX@Capture: {:?}", md_sx, md_sy, onnx_gaze);
-                                
-                                moondream_result = Some(md_gaze);
-                                
-                                // Send all updates to Sidecar
-                                let _ = win.update_moondream(md_sx, md_sy);
-                                
-                                // If we have ONNX capture data, send it too
-                                if let Some((ox, oy)) = onnx_gaze {
-                                    let _ = win.update_captured_onnx(ox, oy);
-                                }
-                            }
-                      }
-                  }
+                       }
             } else {
                  if overlay_window.is_some() {
                      overlay_window = None;
