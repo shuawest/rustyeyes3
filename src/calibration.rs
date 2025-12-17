@@ -55,7 +55,6 @@ impl CalibrationManager {
         };
         
         // Append to CSV
-        let csv_path = format!("{}/dataset.csv", self.data_buffer); // Typo here, fixing in next step is annoying, let's fix in string
         let csv_path = format!("{}/dataset.csv", self.data_dir);
         let mut file = fs::OpenOptions::new()
             .create(true)

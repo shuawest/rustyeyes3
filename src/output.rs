@@ -42,6 +42,10 @@ impl WindowOutput {
         self.window.is_key_down(key)
     }
 
+    pub fn get_mouse_pos(&self, mode: minifb::MouseMode) -> Option<(f32, f32)> {
+        self.window.get_mouse_pos(mode)
+    }
+
     pub fn update(&mut self, buffer: &[u8]) -> Result<()> {
         // buffer is RGB8, need to convert to u32 ARGB
         if self.buffer.len() != self.width * self.height {
