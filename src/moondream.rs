@@ -16,6 +16,7 @@ struct MoondreamResponse {
     status: String,
     response: Option<String>,
     error: Option<String>,
+    #[allow(dead_code)]
     timestamp: u64,
 }
 
@@ -34,7 +35,6 @@ impl MoondreamOracle {
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::inherit()) // Show Python debug logs
-            .spawn()
             .spawn()
             .context("Failed to spawn Python server. Please run `./run.sh` to set up the environment.")?;
         

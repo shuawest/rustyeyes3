@@ -76,8 +76,8 @@ fn main() -> anyhow::Result<()> {
     let screen_h = 900;
 
     // State for Milestone 1: Moondream
-    let mut moondream_oracle: Option<moondream::MoondreamOracle> = None;
-    let mut paused_frame: Option<image::ImageBuffer<image::Rgb<u8>, Vec<u8>>> = None;
+    // let mut moondream_oracle: Option<moondream::MoondreamOracle> = None; // Now in worker thread
+    let paused_frame: Option<image::ImageBuffer<image::Rgb<u8>, Vec<u8>>> = None; // Still used?
     let mut moondream_result: Option<types::Point3D> = None;
     let mut moondream_active = false;
     
