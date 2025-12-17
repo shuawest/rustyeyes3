@@ -20,9 +20,11 @@ We will implement a **Data Collection & Regression** approach.
 
 ## 3. Workflow
 
-### 3.1. Data Collection Mode (New)
+### 3.1. Data Collection Mode
 
-**Activation**: Key `9` toggles "Calibration Mode".
+- **Key 6**: Toggle Overlay Sidecar.
+- **Key 7**: Toggle Moondream Continuous Mode (Snapshot/Live). **CRITICAL**: This must remain available.
+- **Key 9**: Toggle Calibration Mode.
 
 **Interaction**:
 

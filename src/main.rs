@@ -67,7 +67,7 @@ fn main() -> anyhow::Result<()> {
     let mut calibration_mode = false;
 
     println!("Starting Pipeline...");
-    println!("Controls: [0] Combined [1-3] Basic [4] Head Gaze [5] Pupil Gaze [6] Toggle Overlay [9] Calibration Mode");
+    println!("Controls: [0] Combined [1-3] Basic [4] Head Gaze [5] Pupil Gaze [6] Toggle Overlay [7] Moondream [9] Calibration");
 
     // State for Overlay
     let mut show_overlay = true;
@@ -152,7 +152,7 @@ fn main() -> anyhow::Result<()> {
 
     // --- MAIN LOOP ---
     println!("Starting Pipeline...");
-    println!("Controls: [0] Combined [1-3] Basic [4] Head Gaze [5] Pupil Gaze [6] Toggle Overlay");
+    println!("Controls: [0] Combined [1-3] Basic [4] Head Gaze [5] Pupil Gaze [6] Toggle Overlay [7] Moondream [9] Calibration");
 
     // 4. Loop
     while window.is_open() && !window.is_key_down(minifb::Key::Escape) {
