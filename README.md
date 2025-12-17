@@ -1,14 +1,14 @@
 # RustyEyes3 👁️🦀
 
-> **RustyEyes3** is prototype for controlling a mouse cursor using eye gaze detection. The prototype uses rust as the harness for low latency and efficient usage of system resources. It uses the ONNX Runtime to provide Face Mesh (468 pts), Head Pose Estimation, and Hybrid Gaze Tracking locally on the machine. A screen overlay is provided for macOS to display position of the eye gaze cursor.
+**RustyEyes3** is a prototype for controlling a mouse cursor using eye gaze detection. The prototype uses rust as the harness for low latency and efficient usage of system resources. It uses the ONNX Runtime to provide Face Mesh (468 pts), Head Pose Estimation, and Hybrid Gaze Tracking locally on the machine. A screen overlay is provided for macOS to display position of the eye gaze cursor.
 
-## Mission
+The mission is to make a cursor track the position of eye gaze to accurately align with the desired position on the screen with low amounts of jitter and latency. High precision tracking is a bonus.
 
-The goal of this prototype is to make the cursur accurately align with the desired position on the screen, with low amounts of jitter or latency. It should be able to work on low cost and low power device.
-
-## Constraints
+## Design Goals and Constraints
 
 Dual or single camera - eye gaze tracking typically requires multiple cameras for triangulation and depth information. Dual cameras should be used if that is the best approach. Being able to function with a single camera is a bonus.
+
+Infrared camera - low light impacts tracking performance, so being able to work with low cost infrared cmos camera is benefitial.
 
 Target Devices - the target devices are low cost and low power devices such as a Raspberry Pi or NVIDIA Jetson Nano with a touch screen display. Working on macos or other laptops will help with development and testing.
 
