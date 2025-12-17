@@ -45,4 +45,8 @@ Detailed project specifications are organized in the `specs/` directory:
 - [Calibration Specification](specs/CALIBRATION_SPEC.md) - Moondream2 calibration strategy.
 - [Overlay Specification](specs/OVERLAY_SPEC.md) - Triple Cursor Logic and HUD.
 
+## 4. History & Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for a historical journal of changes, bug fixes, and design decisions. This file provides the "Why" behind the current state of the codebase.
+
 See these documents for in-depth behaviors and architecture.

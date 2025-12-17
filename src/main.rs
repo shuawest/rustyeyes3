@@ -197,19 +197,22 @@ fn main() -> anyhow::Result<()> {
         let mut display_buffer = latest_realtime_frame.to_vec();
         let (width, height) = latest_realtime_frame.dimensions();
         
+        // --- PROCESSING (Moved Up for Sync) ---
+        // Always run the full pipeline FIRST so we have the Gaze for this exact frame
+        let output = pipeline.process(&latest_realtime_frame)?;
+        last_pipeline_output = output.clone();
+
         // --- MOONDREAM DISPATCH ---
         if moondream_active {
              // Clone frame? This might be heavy. dynamic_image from cam_frame?
              // cam_frame is RgbBuffer.
              let img = image::DynamicImage::ImageRgb8(latest_realtime_frame.clone());
              
-             // Extract current Gaze for comparison
-             let current_gaze_coords = if let Some(last_out) = &last_pipeline_output {
-                  if let PipelineOutput::Gaze { yaw, pitch, .. } = last_out {
+             // Extract current Gaze for comparison (Now fully synchronized)
+             let current_gaze_coords = if let Some(out) = &output {
+                  if let PipelineOutput::Gaze { yaw, pitch, .. } = out {
                        let eff_yaw = if mirror_mode { -yaw } else { *yaw };
-                       // Use simple scaling for now (same as screen_x calc below)
-                       // Or better: pass raw angles? The worker expects (f32, f32).
-                       // Let's pass the approximate screen coords so we can just draw them directly.
+                       // Precise calculation matching drawing logic
                        let mut sx = width as f32 / 2.0; 
                        let mut sy = height as f32 / 2.0;
                        sx += eff_yaw * 20.0;
@@ -220,9 +223,7 @@ fn main() -> anyhow::Result<()> {
 
              // We use try_send on a bounded channel (1). 
              // If worker is busy, this fails immediately and we skip sending the frame.
-             // This prevents the main loop from stuttering/blocking and prevents memory leaks.
              let _ = tx_frame.try_send((img, current_gaze_coords, None));
-             // Optional: Rate limit logic could go here.
         }
 
         // --- MOONDREAM ASYNC UPDATE ---
@@ -384,6 +385,14 @@ fn main() -> anyhow::Result<()> {
                                 // Send Captured Gaze if available
                                 if let Some((cx, cy)) = captured_gaze_result {
                                     let _ = win.update_captured_onnx(cx, cy);
+                                }
+                                
+                                // Send Moondream Result if available (Fix for blank overlay)
+                                if let Some(pt) = moondream_result {
+                                     // Moondream is normalized 0..1. Map to screen.
+                                     let mx = pt.x * width as f32;
+                                     let my = pt.y * height as f32;
+                                     let _ = win.update_moondream(mx, my);
                                 }
                                 
                                 // Send Config Upates occasionally? 
