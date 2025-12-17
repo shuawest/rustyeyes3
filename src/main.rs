@@ -87,6 +87,7 @@ fn main() -> anyhow::Result<()> {
     // let mut moondream_oracle: Option<moondream::MoondreamOracle> = None; // Now in worker thread
     let paused_frame: Option<image::ImageBuffer<image::Rgb<u8>, Vec<u8>>> = None; // Still used?
     let mut moondream_result: Option<types::Point3D> = None;
+    let mut captured_gaze_result: Option<(f32, f32)> = None; // For "Green Dot" comparison
     let mut moondream_active = false;
     
     // Smoothing State
@@ -202,10 +203,25 @@ fn main() -> anyhow::Result<()> {
              // cam_frame is RgbBuffer.
              let img = image::DynamicImage::ImageRgb8(latest_realtime_frame.clone());
              
+             // Extract current Gaze for comparison
+             let current_gaze_coords = if let Some(last_out) = &last_pipeline_output {
+                  if let PipelineOutput::Gaze { yaw, pitch, .. } = last_out {
+                       let eff_yaw = if mirror_mode { -yaw } else { *yaw };
+                       // Use simple scaling for now (same as screen_x calc below)
+                       // Or better: pass raw angles? The worker expects (f32, f32).
+                       // Let's pass the approximate screen coords so we can just draw them directly.
+                       let mut sx = width as f32 / 2.0; 
+                       let mut sy = height as f32 / 2.0;
+                       sx += eff_yaw * 20.0;
+                       sy -= pitch * 20.0;
+                       Some((sx, sy))
+                  } else { None }
+             } else { None };
+
              // We use try_send on a bounded channel (1). 
              // If worker is busy, this fails immediately and we skip sending the frame.
              // This prevents the main loop from stuttering/blocking and prevents memory leaks.
-             let _ = tx_frame.try_send((img, None, None));
+             let _ = tx_frame.try_send((img, current_gaze_coords, None));
              // Optional: Rate limit logic could go here.
         }
 
@@ -213,7 +229,9 @@ fn main() -> anyhow::Result<()> {
         // Iterate through all available results from the worker
         while let Ok((pt, onnx_data, _cal_id)) = rx_result.try_recv() {
              moondream_result = Some(pt);
-             // TODO: Log onnx_data if needed
+             if let Some(capt) = onnx_data {
+                 captured_gaze_result = Some(capt);
+             }
         }
         // --- INPUT HANDLING ---
         for key in window.get_keys_pressed(minifb::KeyRepeat::No) {
@@ -363,6 +381,11 @@ fn main() -> anyhow::Result<()> {
                             if let Some(win) = overlay_window.as_mut() {
                                 let _ = win.update_gaze(screen_x, screen_y);
                                 
+                                // Send Captured Gaze if available
+                                if let Some((cx, cy)) = captured_gaze_result {
+                                    let _ = win.update_captured_onnx(cx, cy);
+                                }
+                                
                                 // Send Config Upates occasionally? 
                                 // Actually, we should send font config on init or change.
                                 // For now, let's just send it every frame? No, that's spammy.
@@ -424,6 +447,33 @@ fn main() -> anyhow::Result<()> {
                         }
                     }
                 }
+            }
+            
+            // --- CAPTURED GAZE (Green Dot) ---
+            if moondream_active {
+               if let Some((cx, cy)) = captured_gaze_result {
+                   let mx = cx as i32;
+                   let my = cy as i32;
+                   let radius = 10;
+                   let color = (0, 255, 0); // Green
+                   
+                   for dy in -radius..=radius {
+                       for dx in -radius..=radius {
+                           if dx*dx + dy*dy <= radius*radius {
+                               let px = mx + dx;
+                               let py = my + dy;
+                               if px >= 0 && px < width as i32 && py >= 0 && py < height as i32 {
+                                   let idx = (py as usize * width as usize + px as usize) * 3;
+                                   if idx + 2 < display_buffer.len() {
+                                       display_buffer[idx] = color.0;
+                                       display_buffer[idx+1] = color.1;
+                                       display_buffer[idx+2] = color.2;
+                                   }
+                               }
+                           }
+                       }
+                   }
+               }
             }
 
             // --- VISUAL MENU ---
@@ -487,13 +537,37 @@ fn main() -> anyhow::Result<()> {
             // Draw Gaze / Moondream Coordinates
             if let Some(out) = &last_pipeline_output {
                if let PipelineOutput::Gaze { yaw, pitch, .. } = out {
+                   // Raw Angles
                    let text = format!("Gaze: {:.1}, {:.1}", yaw, pitch);
                    draw_text(&mut display_buffer, width as usize, height as usize, 10, y_start, &text, (200, 200, 200));
+                   y_start += line_height;
+
+                   // Screen Coordinates (Recalculate to match Overlay)
+                   let eff_yaw = if mirror_mode { -yaw } else { *yaw };
+                   let mut sx = width as f32 / 2.0; 
+                   let mut sy = height as f32 / 2.0;
+                   let x_factor = 20.0;
+                   let y_factor = 20.0;
+                   sx += eff_yaw * x_factor;
+                   sy -= pitch * y_factor;
+
+                   let text_screen = format!("Screen: {:.0}, {:.0}", sx, sy);
+                   draw_text(&mut display_buffer, width as usize, height as usize, 10, y_start, &text_screen, (0, 255, 255)); // Cyan
                    y_start += line_height;
                }
             }
             
             if moondream_active {
+                if let Some((cx, cy)) = captured_gaze_result {
+                     let text = format!("Captured: {:.0}, {:.0}", cx, cy);
+                     draw_text(&mut display_buffer, width as usize, height as usize, 10, y_start, &text, (0, 255, 0));
+                     y_start += line_height;
+                } else {
+                     let text = "Captured: ----, ----";
+                     draw_text(&mut display_buffer, width as usize, height as usize, 10, y_start, &text, (100, 100, 100));
+                     y_start += line_height;
+                }
+
                 if let Some(pt) = moondream_result {
                     let text = format!("Moon: ({:.2}, {:.2})", pt.x, pt.y);
                     draw_text(&mut display_buffer, width as usize, height as usize, 10, y_start, &text, (255, 215, 0));
