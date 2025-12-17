@@ -13,6 +13,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - _Change_: Implemented the logic for `Key9` to toggle `calibration_mode` boolean and added it to the HUD Menu.
   - _Intent_: The handler was previously empty, preventing the user from entering calibration mode.
   - _Approach_: Added state toggle `val = !val` in the input loop and added `"9", "Calibration"` to the `menu_items` array in the drawing loop.
+- **Unreleased - Visual Cleanup**:
+  - _Intent_: Declutter the main video feed and consolidate information on the overlay as requested.
+  - _Approach_: Implemented `S <text>` protocol command in Swift overlay. Modified `main.rs` to construct the menu string and send it via IPC instead of drawing locally. Removed the redundant 5-corner debug loop in Swift.
+- **Unreleased - HUD Refinement**:
+  - _Change_: Restored 5-point HUD stats (Corners + Center) in Overlay. Refined positioning: Vertically centered Menu, shifted right-side stats closer to edge. Updated Menu style to UPPERCASE labels to match HUD font aesthetic.
+  - _Intent_: Restore debug visibility, center controls, and ensure a unified visual design.
+- **Unreleased - Moondream Stabilization**:
+  - _Change_: Modified `moondream_server.py` to iterate through all logic prompts to prevent double-inference penalties. Updated visualization flow: Immediate Green/Red dot on capture, Green/Yellow dot upon completion + Cyan Moondream dot. Added "MOON: WATCHING..." status.
+  - _Intent_: Fix "no coordinates" errors, reduce latency, and provide immediate visual feedback as requested.
+- **Unreleased - Fix Mirror Mode Regression**:
+  - _Change_: Restored `image::imageops::flip_horizontal_in_place` in the capture loop. Restored manual yaw inversion Logic (`-yaw`) in both drawing and Moondream dispatch.
+  - _Intent_: Correctly mirror the video feed AND invert the gaze X-coordinate calculation so that looking Left (user) moves the dot Left (screen), matching mirror expectations.
 
 ### Documentation
 

@@ -68,17 +68,22 @@ def main():
                         "what the person is looking at"
                     ]
                     
-                    result_dict = model.point(image, prompts_for_point[0])
-                    points = result_dict.get("points", [])
-                    
-                    if points and len(points) > 0:
-                        # Got coordinates! Use first point
-                        x, y = points[0]
-                        response = f"COORDS:{x:.4f},{y:.4f}"
-                        log_debug(f"point() returned coordinates: ({x:.4f}, {y:.4f})")
-                    else:
+                    param_found = False
+                    for prompt in prompts_for_point:
+                        result_dict = model.point(image, prompt)
+                        points = result_dict.get("points", [])
+                        
+                        if points and len(points) > 0:
+                            # Got coordinates! Use first point
+                            x, y = points[0]
+                            response = f"COORDS:{x:.4f},{y:.4f}"
+                            log_debug(f"point() returned coordinates: ({x:.4f}, {y:.4f}) with prompt '{prompt}'")
+                            param_found = True
+                            break
+                            
+                    if not param_found:
                         # point() didn't return coordinates, fall back to query
-                        log_debug("point() returned no coordinates, falling back to query()")
+                        log_debug("point() returned no coordinates with any prompt, falling back to query()")
                         query_prompts = [
                             "Where is the person looking? Give me screen coordinates.",
                             "What direction is the person's gaze pointing?"

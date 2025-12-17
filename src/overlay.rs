@@ -38,9 +38,24 @@ impl OverlayWindow {
         Ok(())
     }
 
+    pub fn update_captured_onnx_with_state(&mut self, x: f32, y: f32, state: i32) -> Result<()> {
+        if let Some(stdin) = self.process.stdin.as_mut() {
+            writeln!(stdin, "C {} {} {}", x, y, state)?;
+        }
+        Ok(())
+    }
+
     pub fn update_font(&mut self, family: &str, size: u32) -> Result<()> {
         if let Some(stdin) = self.process.stdin.as_mut() {
             writeln!(stdin, "F {} {}", family, size)?;
+        }
+        Ok(())
+    }
+
+    pub fn update_menu(&mut self, menu_text: &str) -> Result<()> {
+        if let Some(stdin) = self.process.stdin.as_mut() {
+            let safe_text = menu_text.replace('\n', "|");
+            writeln!(stdin, "S {}", safe_text)?;
         }
         Ok(())
     }

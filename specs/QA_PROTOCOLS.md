@@ -1,0 +1,49 @@
+# QA Protocols for Rusty Eyes 3
+
+This document outlines manual verification steps to be performed before releasing changes, especially for refactors affecting core pipelines.
+
+## 1. Mirror Mode Verification
+
+**Risk Area**: `main.rs` frame flipping and coordinate logic.
+
+**Protocol**:
+
+1. Launch app (`cargo run`).
+2. Ensure you are in default mode (Mesh On).
+3. Toggle Mirror Mode [5].
+   - [ ] Verify the video feed flips horizontally.
+4. Toggle Eye Gaze [3] -> ON.
+5. **Look Left** (physically turn head left).
+   - [ ] **Dot Movement**: The Blue Gaze dot should move to the **LEFT** side of the screen.
+   - [ ] **Reason**: In a mirror, if you look to your left, your reflection looks to its left (which is screen left).
+6. **Look Right** (physically turn head right).
+   - [ ] **Dot Movement**: The Blue Gaze dot should move to the **RIGHT** side of the screen.
+7. Toggle Mirror Mode [5] -> OFF.
+   - [ ] **Look Left**: Dot should move **RIGHT** (inverted, camera perspective).
+
+## 2. Moondream Integration
+
+**Risk Area**: Python IPC, Coordinate Parsing, Latency.
+
+**Protocol**:
+
+1. Toggle Moondream [7] -> ON.
+   - [ ] Status Menu should show `MOONDREAM: ON`.
+2. Wait for a capture (Green Dot appears).
+   - [ ] **Immediate Feedback**: A Green Dot with Red Center should appear _instantly_ when status says "MOON: WATCHING...".
+3. Wait for completion (~2-5s).
+   - [ ] **Result**:
+     - Green Dot changes to Yellow Center.
+     - Cyan Dot appears.
+   - [ ] **Accuracy**: Cyan Dot should be reasonably close to Green Dot.
+
+## 3. Calibration
+
+**Risk Area**: Coordinate mapping, File I/O.
+
+**Protocol**:
+
+1. Toggle Calibration [9] -> ON.
+2. Spacebar Capture.
+   - [ ] Log output: `[CALIBRATION] Captured Point...`.
+   - [ ] Overlay: "LAST CAL: (x, y)" updates.

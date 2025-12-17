@@ -5,9 +5,11 @@ import Foundation
 var cursorPoint: NSPoint = NSPoint(x: 0, y: 0)
 var moondreamPoint: NSPoint? = nil
 var capturedPoint: NSPoint? = nil
+var capturedState: Int = -1 // 0=Pending(Red), 1=Done(Yellow), -1=Default(White)
 var showOverlay: Bool = true
 var customFontName: String = "Monospace"
 var customFontSize: CGFloat = 14.0
+var menuState: String = ""
 
 class OverlayView: NSView {
     override func draw(_ dirtyRect: NSRect) {
@@ -65,7 +67,15 @@ class OverlayView: NSView {
             
             let csRadius: CGFloat = 5.0
             let csRect = NSRect(x: capX - csRadius, y: capY - csRadius, width: csRadius * 2, height: csRadius * 2)
-            NSColor.white.setFill()
+            
+            // Color based on State
+            if capturedState == 0 {
+                NSColor.red.setFill() // Pending
+            } else if capturedState == 1 {
+                NSColor.yellow.setFill() // Done
+            } else {
+                NSColor.white.setFill() // Default
+            }
             NSBezierPath(ovalIn: csRect).fill()
         }
 
@@ -87,7 +97,7 @@ class OverlayView: NSView {
             NSBezierPath(ovalIn: msRect).fill()
         }
         
-        // 5. HUD Text (4 Corners + Center)
+        // 5. HUD Text (Top-Left Only)
         let font: NSFont
         if customFontName == "Monospace" {
             font = NSFont.monospacedSystemFont(ofSize: customFontSize, weight: .bold)
@@ -101,6 +111,7 @@ class OverlayView: NSView {
             .strokeWidth: -2.0
         ]
         
+        // 5. HUD Stats (Restored 4 Corners + Center)
         let info = [
             String(format: "REALTIME:  %04.0f, %04.0f", cursorPoint.x, cursorPoint.y),
             capturedPoint != nil ? String(format: "CAPTURED:  %04.0f, %04.0f", capturedPoint!.x, capturedPoint!.y) : "CAPTURED:  ----, ----",
@@ -108,15 +119,23 @@ class OverlayView: NSView {
         ].joined(separator: "\n")
         
         let offsets = [
-            NSPoint(x: 20, y: screenH - 120), // TL (Lowered from 80)
-            NSPoint(x: screenW - 250, y: screenH - 120), // TR
-            NSPoint(x: 20, y: 40), // BL (Lowered to 40)
-            NSPoint(x: screenW - 250, y: 40), // BR
-            NSPoint(x: screenW/2 - 100, y: screenH/2 - 40) // Center
+            NSPoint(x: 20, y: screenH - 120), // TL
+            NSPoint(x: screenW - 250, y: screenH - 120), // TR (Moved right)
+            NSPoint(x: 20, y: 40), // BL
+            NSPoint(x: screenW - 250, y: 40), // BR (Moved right)
+            NSPoint(x: screenW/2 - 150, y: screenH/2 - 40) // Center
         ]
         
         for p in offsets {
             info.draw(at: p, withAttributes: attrs)
+        }
+        
+        // 6. Menu (Vertically Centered, Left Aligned)
+        if !menuState.isEmpty {
+            let menuHeight = CGFloat(menuState.split(separator: "\n").count) * (customFontSize + 4)
+            // Center vertically: (ScreenH - Height) / 2
+            let menuY = (screenH - menuHeight) / 2
+            menuState.draw(at: NSPoint(x: 20, y: menuY), withAttributes: attrs)
         }
     }
 }
@@ -168,8 +187,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                          }
                     } else if parts[0] == "C" && parts.count >= 3 {
                          if let x = Double(parts[1]), let y = Double(parts[2]) {
+                             let state = (parts.count >= 4) ? (Int(parts[3]) ?? -1) : -1
                              DispatchQueue.main.async {
                                  capturedPoint = NSPoint(x: x, y: y)
+                                 capturedState = state
                                  view.needsDisplay = true
                              }
                          }
@@ -188,10 +209,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                             customFontSize = CGFloat(size)
                             view.needsDisplay = true
                         }
-                    } else if let x = Double(parts[0]), let y = Double(parts[1]) {
-                        // Legacy fallback
+                    } else if parts[0] == "S" && parts.count >= 2 {
+                        // Protocol: S <Line1>| <Line2>| ...
+                        // Used for Menu State
+                        let raw = parts[1..<parts.count].joined(separator: " ")
+                        let formatted = raw.replacingOccurrences(of: "|", with: "\n")
+                        
                         DispatchQueue.main.async {
-                            cursorPoint = NSPoint(x: x, y: y)
+                            menuState = formatted
                             view.needsDisplay = true
                         }
                     }

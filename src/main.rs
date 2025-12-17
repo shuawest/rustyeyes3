@@ -60,7 +60,7 @@ fn main() -> anyhow::Result<()> {
     println!("Opened camera: {}", camera.name());
 
     // 2. Setup Inference
-    let mut current_pipeline = create_pipeline(&args.model.unwrap_or_else(|| "pupil_gaze".to_string()));
+    let current_pipeline = create_pipeline(&args.model.unwrap_or_else(|| "pupil_gaze".to_string()));
     println!("Active Pipeline: {}", current_pipeline.name());
 
     // 3. Setup Output
@@ -75,7 +75,7 @@ fn main() -> anyhow::Result<()> {
     let mut calibration_mode = false;
 
     println!("Starting Pipeline...");
-    println!("Controls: [0] Combined [1-3] Basic [4] Head Gaze [5] Pupil Gaze [6] Toggle Overlay [7] Moondream [9] Calibration");
+    println!("Controls: [1] Mesh [2] Pose [3] Gaze [5] Mirror [6] Overlay [7] Moondream [9] Calibration [Space] Capture");
 
     // State for Overlay
     // let mut show_overlay = true; // Moved to config above
@@ -85,17 +85,17 @@ fn main() -> anyhow::Result<()> {
 
     // State for Milestone 1: Moondream
     // let mut moondream_oracle: Option<moondream::MoondreamOracle> = None; // Now in worker thread
-    let paused_frame: Option<image::ImageBuffer<image::Rgb<u8>, Vec<u8>>> = None; // Still used?
+    let _paused_frame: Option<image::ImageBuffer<image::Rgb<u8>, Vec<u8>>> = None; // Still used?
     let mut moondream_result: Option<types::Point3D> = None;
     let mut captured_gaze_result: Option<(f32, f32)> = None; // For "Green Dot" comparison
     let mut moondream_active = false;
     
     // Smoothing State
-    let mut smooth_x = screen_w as f32 / 2.0;
-    let mut smooth_y = screen_h as f32 / 2.0;
+    let _smooth_x = screen_w as f32 / 2.0;
+    let _smooth_y = screen_h as f32 / 2.0;
     
     // Mouse Interaction State
-    let mut mouse_down_prev = false;
+    let _mouse_down_prev = false;
     
     // HUD State
     let mut last_calibration_point: Option<(f32, f32, u64)> = None;
@@ -172,30 +172,52 @@ fn main() -> anyhow::Result<()> {
     let mut mirror_mode = config.defaults.mirror_mode;
     let mut show_overlay = config.defaults.show_overlay;
     
-    // We keep one robust pipeline active
+    let mut moondream_pending = false;
+
     // We keep one robust pipeline active
     let mut pipeline = create_pipeline("pupil_gaze"); 
     
     // Initialize Font Renderer (Try to load custom, else None -> Fallback to bitmap)
     let font_renderer = FontRenderer::try_load(&config.ui.font_family);
     
+    // --- MAIN LOOP ---
     while window.is_open() && !window.is_key_down(minifb::Key::Escape) {
+        let (width, height) = window.get_size();
         
-        // --- INPUT HANDLING ---
-        // (Moved to dedicated block below for clean toggling)
+        // Handle font setup if needed (only once)
+        if overlay_window.is_none() && show_overlay {
+             if let Ok(mut win) = OverlayWindow::new(screen_w, screen_h) {
+                  let _ = win.update_font(&config.ui.font_family, config.ui.font_size_pt);
+                  overlay_window = Some(win);
+             }
+        } else if !show_overlay && overlay_window.is_some() {
+             overlay_window = None;
+        }
 
-        // Capture Frame (Unified)
-        let mut latest_realtime_frame = if let Ok(mut cam_frame) = camera.capture() {
+        // --- CAMERA CAPTURE ---
+        // Capture newest frame. 
+        // If we have a paused_frame (from Spacebar freeze), use that? No, calibration freeze is separate.
+        // We always run realtime pipeline.
+        
+        // Non-blocking capture
+        let latest_realtime_frame = if let Ok(mut cam_frame) = camera.capture() {
+             // Mirror if enabled (Standard Webcam Behavior)
+             // CRITICAL: This physical flip is required for the user to see themselves as a mirror.
+             // DO NOT REMOVE. Regression Risk: Local Logic.
              if mirror_mode {
                  image::imageops::flip_horizontal_in_place(&mut cam_frame);
              }
              cam_frame
         } else {
-             continue;
+             // If no frame, skip this loop iteration? Or reuse last frame?
+             // Reuse last for stability
+             // For now, let's just create black frame or skip? 
+             // Ideally we shouldn't fail often.
+             continue; // Skip loop 
         };
-        
+
         let mut display_buffer = latest_realtime_frame.to_vec();
-        let (width, height) = latest_realtime_frame.dimensions();
+        // let (width, height) = latest_realtime_frame.dimensions(); // Use window dims
         
         // --- PROCESSING (Moved Up for Sync) ---
         // Always run the full pipeline FIRST so we have the Gaze for this exact frame
@@ -209,11 +231,11 @@ fn main() -> anyhow::Result<()> {
              let img = image::DynamicImage::ImageRgb8(latest_realtime_frame.clone());
              
              // Extract current Gaze for comparison (Now fully synchronized)
-             let current_gaze_coords = if let Some(out) = &output {
-                  if let PipelineOutput::Gaze { yaw, pitch, .. } = out {
-                       let eff_yaw = if mirror_mode { -yaw } else { *yaw };
-                       // Precise calculation matching drawing logic
-                       let mut sx = width as f32 / 2.0; 
+              let current_gaze_coords = if let Some(out) = &output {
+                   if let PipelineOutput::Gaze { yaw, pitch, .. } = out {
+                        let eff_yaw = if mirror_mode { -yaw } else { *yaw };
+                        // Precise calculation matching drawing logic
+                        let mut sx = width as f32 / 2.0; 
                        let mut sy = height as f32 / 2.0;
                        sx += eff_yaw * 20.0;
                        sy -= pitch * 20.0;
@@ -223,7 +245,15 @@ fn main() -> anyhow::Result<()> {
 
              // We use try_send on a bounded channel (1). 
              // If worker is busy, this fails immediately and we skip sending the frame.
-             let _ = tx_frame.try_send((img, current_gaze_coords, None));
+             let result = tx_frame.try_send((img, current_gaze_coords, None));
+             if result.is_ok() {
+                  // SUCCESS: We sent a frame to Moondream.
+                  // Update state to PENDING and show immediate capture dot.
+                  moondream_pending = true;
+                  if let Some(coords) = current_gaze_coords {
+                       captured_gaze_result = Some(coords);
+                  }
+             }
         }
 
         // --- MOONDREAM ASYNC UPDATE ---
@@ -233,6 +263,7 @@ fn main() -> anyhow::Result<()> {
              if let Some(capt) = onnx_data {
                  captured_gaze_result = Some(capt);
              }
+             moondream_pending = false; // Result received!
         }
         // --- INPUT HANDLING ---
         for key in window.get_keys_pressed(minifb::KeyRepeat::No) {
@@ -254,8 +285,30 @@ fn main() -> anyhow::Result<()> {
                     if moondream_active {
                         moondream_active = false;
                         moondream_result = None;
+                        moondream_pending = false;
                     } else {
                         moondream_active = true;
+                    }
+                },
+                minifb::Key::Space => {
+                    if calibration_mode {
+                        let mouse_pos = window.get_mouse_pos(minifb::MouseMode::Pass);
+                        if let Some((mx, my)) = mouse_pos {
+                             let timestamp = std::time::SystemTime::now()
+                                .duration_since(std::time::UNIX_EPOCH)
+                                .unwrap()
+                                .as_secs();
+
+                             if let Some(out) = &last_pipeline_output {
+                                  match calibration_manager.save_data_point(&latest_realtime_frame, mx, my, Some(out.clone())) {
+                                      Ok(timestamp) => {
+                                          last_calibration_point = Some((mx, my, timestamp));
+                                          println!("[CALIBRATION] Captured Point at ({}, {})", mx, my);
+                                      },
+                                      Err(e) => eprintln!("Failed to save calibration point: {}", e),
+                                  }
+                             }
+                        }
                     }
                 },
                 minifb::Key::Key9 => {
@@ -270,20 +323,18 @@ fn main() -> anyhow::Result<()> {
             }
         }
 
-        // --- PROCESSING ---
-        // Always run the full pipeline
-        let output = pipeline.process(&latest_realtime_frame)?;
-        last_pipeline_output = output.clone();
-
         // --- DRAWING ---
         // display_buffer is already init with frame pixels above
         
-        if let Some(out) = output {
+        if let Some(out) = &last_pipeline_output {
             match out {
                     PipelineOutput::Gaze { left_eye, right_eye, yaw, pitch, roll: _ , vector: _, landmarks } => {
                        
                         // Correct for Mirror Mode
-                        let yaw = if mirror_mode { -yaw } else { yaw };
+                        // CRITICAL: We MUST invert Yaw when mirroring because "Look Left" (User) -> "Move Left" (Screen)
+                        // requires a negative coordinate shift in screen space.
+                        // DO NOT REMOVE. Regression Risk: Visual Direction.
+                        let yaw = if mirror_mode { -yaw } else { *yaw };
 
                         // 1. Face Mesh
                         if show_mesh {
@@ -389,7 +440,10 @@ fn main() -> anyhow::Result<()> {
                                 
                                 // Send Captured Gaze if available
                                 if let Some((cx, cy)) = captured_gaze_result {
-                                    let _ = win.update_captured_onnx(cx, cy);
+                                    // State: 0 (Pending/Red) if moondream_pending
+                                    // State: 1 (Done/Yellow) if !moondream_pending
+                                    let state = if moondream_pending { 0 } else { 1 };
+                                    let _ = win.update_captured_onnx_with_state(cx, cy, state);
                                 }
                                 
                                 // Send Moondream Result if available (Fix for blank overlay)
@@ -422,46 +476,46 @@ fn main() -> anyhow::Result<()> {
             }
 
 
-            // --- MOONDREAM TARGET ---
-            if let Some(pt) = moondream_result {
-                // If active or we have a sticky result?
-                // Let's draw if we have a result.
-                let mx = (pt.x * width as f32) as i32;
-                let my = (pt.y * height as f32) as i32;
+            // --- MOONDREAM TARGET RENDER (Optional, usually on Overlay now) ---
+            // if let Some(pt) = moondream_result {
+            //     // If active or we have a sticky result?
+            //     // Let's draw if we have a result.
+            //     let mx = (pt.x * width as f32) as i32;
+            //     let my = (pt.y * height as f32) as i32;
                 
-                // Draw Gold Crosshair (Target)
-                let size = 20;
-                let thickness = 2;
-                let color = (255, 215, 0); // Gold
+            //     // Draw Gold Crosshair (Target)
+            //     let size = 20;
+            //     let thickness = 2;
+            //     let color = (255, 215, 0); // Gold
                 
-                for i in -size..=size {
-                    for t in -thickness..=thickness {
-                        // Horizontal
-                        let px = mx + i;
-                        let py = my + t;
-                        if px >= 0 && px < width as i32 && py >= 0 && py < height as i32 {
-                             let idx = (py as usize * width as usize + px as usize) * 3;
-                             if idx + 2 < display_buffer.len() {
-                                 display_buffer[idx] = color.0;
-                                 display_buffer[idx+1] = color.1;
-                                 display_buffer[idx+2] = color.2;
-                             }
-                        }
+            //     for i in -size..=size {
+            //         for t in -thickness..=thickness {
+            //             // Horizontal
+            //             let px = mx + i;
+            //             let py = my + t;
+            //             if px >= 0 && px < width as i32 && py >= 0 && py < height as i32 {
+            //                  let idx = (py as usize * width as usize + px as usize) * 3;
+            //                  if idx + 2 < display_buffer.len() {
+            //                      display_buffer[idx] = color.0;
+            //                      display_buffer[idx+1] = color.1;
+            //                      display_buffer[idx+2] = color.2;
+            //                  }
+            //             }
                         
-                        // Vertical
-                        let px = mx + t;
-                        let py = my + i;
-                        if px >= 0 && px < width as i32 && py >= 0 && py < height as i32 {
-                             let idx = (py as usize * width as usize + px as usize) * 3;
-                             if idx + 2 < display_buffer.len() {
-                                 display_buffer[idx] = color.0;
-                                 display_buffer[idx+1] = color.1;
-                                 display_buffer[idx+2] = color.2;
-                             }
-                        }
-                    }
-                }
-            }
+            //             // Vertical
+            //             let px = mx + t;
+            //             let py = my + i;
+            //             if px >= 0 && px < width as i32 && py >= 0 && py < height as i32 {
+            //                  let idx = (py as usize * width as usize + px as usize) * 3;
+            //                  if idx + 2 < display_buffer.len() {
+            //                      display_buffer[idx] = color.0;
+            //                      display_buffer[idx+1] = color.1;
+            //                      display_buffer[idx+2] = color.2;
+            //                  }
+            //             }
+            //         }
+            //     }
+            // }
             
             // --- CAPTURED GAZE (Green Dot) ---
             if moondream_active {
@@ -502,101 +556,32 @@ fn main() -> anyhow::Result<()> {
                 ("9", "Calibration", calibration_mode),
             ];
             
-            let mut y_start = height as usize / 2 - 150;
-            let menu_scale = config.ui.menu_scale;
-            let line_height = 12 * menu_scale;
-            
-            // Draw Toggles
-            // Helper to draw text with fallback
-            let draw_text = |buf: &mut [u8], w: usize, h: usize, x: usize, y: usize, txt: &str, col: (u8, u8, u8)| {
-                 if let Some(fr) = &font_renderer {
-                     fr.draw_text(buf, w, h, x, y, txt, col, config.ui.font_size_pt as f32);
-                 } else {
-                     font::draw_text_line(buf, w, h, x, y, txt, col, menu_scale);
+            // --- VISUAL MENU & HUD SYNC ---
+            // Construct Menu String for Overlay
+            if show_overlay {
+                 // 1. Menu Items
+                 let mut menu_str = String::new();
+                 for (key, label, active) in menu_items.iter() {
+                     let status = if *active { "ON" } else { "OFF" };
+                     // Format: [1] FACE MESH: ON
+                     menu_str.push_str(&format!("[{}] {}: {}|", key, label.to_uppercase(), status));
                  }
-            };
-            
-            // Calc line height based on renderer
-            let line_height = if let Some(fr) = &font_renderer {
-                fr.measure_height(config.ui.font_size_pt as f32) + 5
-            } else {
-                12 * menu_scale
-            };
-
-            for (key, label, active) in menu_items.iter() {
-                let color = if *active { (0, 255, 0) } else { (255, 255, 255) };
-                let status = if *active { "ON" } else { "OFF" };
-                let text = format!("[{}] {} [{}]", key, label, status);
-                draw_text(&mut display_buffer, width as usize, height as usize, 10, y_start, &text, color);
-                y_start += line_height;
+                 
+                 // Moondream Status
+                 if moondream_active && moondream_pending {
+                     menu_str.push_str("MOON: WATCHING...|");
+                 }
+                 
+                 // 2. Last Calibration Point
+                 if let Some((lx, ly, _ts)) = last_calibration_point {
+                     menu_str.push_str(&format!("LAST CAL: {:.0}, {:.0}|", lx, ly));
+                 }
+                 
+                 // Send to Overlay
+                 if let Some(win) = overlay_window.as_mut() {
+                     let _ = win.update_menu(&menu_str);
+                 }
             }
-            
-            y_start += line_height; // Spacer
-            
-            // Draw System Toggles
-            let system_toggles = [
-                ("6", "Overlay", show_overlay),
-                ("7", "Moondream", moondream_active),
-                ("9", "Calibration", calibration_mode),
-            ];
-            
-            for (key, label, active) in system_toggles.iter() {
-                let color = if *active { (0, 255, 0) } else { (255, 255, 255) };
-                let status = if *active { "ON" } else { "OFF" };
-                let text = format!("[{}] {} [{}]", key, label, status);
-                 draw_text(&mut display_buffer, width as usize, height as usize, 10, y_start, &text, color);
-                y_start += line_height;
-            }
-
-            y_start += line_height; // Spacer
-            
-            // --- HUD STATS ---
-            // Draw Gaze / Moondream Coordinates
-            if let Some(out) = &last_pipeline_output {
-               if let PipelineOutput::Gaze { yaw, pitch, .. } = out {
-                   // Raw Angles
-                   let text = format!("Gaze: {:.1}, {:.1}", yaw, pitch);
-                   draw_text(&mut display_buffer, width as usize, height as usize, 10, y_start, &text, (200, 200, 200));
-                   y_start += line_height;
-
-                   // Screen Coordinates (Recalculate to match Overlay)
-                   let eff_yaw = if mirror_mode { -yaw } else { *yaw };
-                   let mut sx = width as f32 / 2.0; 
-                   let mut sy = height as f32 / 2.0;
-                   let x_factor = 20.0;
-                   let y_factor = 20.0;
-                   sx += eff_yaw * x_factor;
-                   sy -= pitch * y_factor;
-
-                   let text_screen = format!("Screen: {:.0}, {:.0}", sx, sy);
-                   draw_text(&mut display_buffer, width as usize, height as usize, 10, y_start, &text_screen, (0, 255, 255)); // Cyan
-                   y_start += line_height;
-               }
-            }
-            
-            if moondream_active {
-                if let Some((cx, cy)) = captured_gaze_result {
-                     let text = format!("Captured: {:.0}, {:.0}", cx, cy);
-                     draw_text(&mut display_buffer, width as usize, height as usize, 10, y_start, &text, (0, 255, 0));
-                     y_start += line_height;
-                } else {
-                     let text = "Captured: ----, ----";
-                     draw_text(&mut display_buffer, width as usize, height as usize, 10, y_start, &text, (100, 100, 100));
-                     y_start += line_height;
-                }
-
-                if let Some(pt) = moondream_result {
-                    let text = format!("Moon: ({:.2}, {:.2})", pt.x, pt.y);
-                    draw_text(&mut display_buffer, width as usize, height as usize, 10, y_start, &text, (255, 215, 0));
-                    y_start += line_height;
-                } else {
-                    let text = "Moon: Waiting...";
-                     draw_text(&mut display_buffer, width as usize, height as usize, 10, y_start, &text, (255, 255, 255));
-                     y_start += line_height;
-                }
-            }
-
-            // --- WINDOW UPDATE ---
             // CRITICAL: Must be called to show the frame!
             window.update(&display_buffer)?;
         }

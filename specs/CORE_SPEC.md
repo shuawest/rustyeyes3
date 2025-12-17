@@ -49,27 +49,32 @@ The system shall support runtime-switchable pipelines:
 
 - **Type**: Calibration / Validation.
 - **Function**: Periodically analyzes the video frame using a Vision-Language Model (VLM) to verify gaze direction against the ONNX pipeline.
-- **Output**:
-  - **Cyan Circle**: The model's predicted gaze point (updates at model inference speed).
-  - **Green Circle**: The ONNX gaze point captured _at the exact moment_ the VLM frame was taken (Ground Truth reference).
-  - **Console Logs**: Prints tracking data for calibration analysis.
+- **Output Flow**:
+  1. **Capture (Start)**: Frame and Gaze captured. Status: "MOON: WATCHING...".
+  2. **Pending**: Displays **Green Dot with Red Center** (Captured ONNX Gaze) to confirm capture timing.
+  3. **Completion**:
+     - **Cyan Dot**: Moondream's predicted gaze point.
+     - **Green Dot with Yellow Center**: The original captured ONNX gaze point for comparison.
 
 ### 1.3. User Interface (UI)
 
 - **Windowing**: A native window displaying the video feed with overlaid graphics.
 - **Controls**:
-  - `0`: Switch to Combined Mode (Mesh + Gaze + Overlay) [Default].
-  - `1-5`: Switch Pipelines instantaneously (Exclusive Radio Button behavior).
-  - `6`: **Toggle** Overlay (Show/Hide macOS Sidecar). Repeated presses toggle visibility.
-  - `7`: **Toggle** Moondream Mode. Repeated presses start/stop the background worker.
+  - `1`: Toggle Face Mesh.
+  - `2`: Toggle Head Pose.
+  - `3`: Toggle Eye Gaze.
+  - `5`: Toggle Mirror Mode.
+  - `6`: **Toggle** Overlay (Show/Hide macOS Sidecar).
+  - `7`: **Toggle** Moondream Mode.
+  - `9`: **Toggle** Calibration Mode.
+  - `Space`: Capture Calibration Point (if Mode 9 active).
   - `ESC`: Quit application.
 - **Visuals**:
-  - Clear, high-contrast overlays:
-    - **Red**: Face Mesh.
-    - **Blue**: Real-time Gaze.
-    - **Cyan**: Moondream Prediction (Simulated in v0.1).
-    - **Green**: Calibration Reference (Captured ONNX).
-  - Minimal latency rendering.
+  - **Red**: Face Mesh (Configurable).
+  - **Blue Ray**: Real-time Gaze.
+  - **Cyan Dot**: Moondream Prediction.
+  - **Green Dot (Red Center)**: Gaze at Capture Start.
+  - **Green Dot (Yellow Center)**: Gaze stored from Capture (Result comparison).
 
 ## 2. Technical Requirements
 

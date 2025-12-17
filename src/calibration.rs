@@ -7,12 +7,14 @@ use serde::{Deserialize, Serialize};
 
 use crate::types::{CalibrationPoint, CalibrationProfile, PipelineOutput};
 
+#[allow(dead_code)]
 pub struct CalibrationManager {
     pub data_dir: String,
     pub profile: Option<CalibrationProfile>,
     data_buffer: Vec<CalibrationPoint>,
 }
 
+#[allow(dead_code)]
 impl CalibrationManager {
     pub fn new(data_dir: &str) -> Result<Self> {
         if !Path::new(data_dir).exists() {
