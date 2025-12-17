@@ -3,14 +3,15 @@
     "show_mesh": true,
     "show_pose": true,
     "show_gaze": false,
-    "mirror_mode": true,
     "show_overlay": true,
+    "mirror_mode": true,
     "moondream_active": false,
     "head_pose_length": 150.0
   },
   "ui": {
     "menu_scale": 2,
     "font_size_pt": 12,
+    "font_family": "Monospace",
     "mesh_dot_size": 2,
     "mesh_color_hex": "#FF0000"
   }
