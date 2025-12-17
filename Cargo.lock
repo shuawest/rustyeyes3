@@ -291,11 +291,13 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
+ "cocoa 0.24.1",
  "colored",
  "image",
  "minifb",
  "ndarray 0.15.6",
  "nokhwa",
+ "objc",
  "ort",
  "thiserror 1.0.69",
  "tokio",
@@ -394,8 +396,38 @@ dependencies = [
  "bitflags 1.3.2",
  "block",
  "core-foundation 0.7.0",
- "core-graphics",
+ "core-graphics 0.19.2",
  "foreign-types",
+ "libc",
+ "objc",
+]
+
+[[package]]
+name = "cocoa"
+version = "0.24.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f425db7937052c684daec3bd6375c8abe2d146dca4b8b143d6db777c39138f3a"
+dependencies = [
+ "bitflags 1.3.2",
+ "block",
+ "cocoa-foundation 0.1.2",
+ "core-foundation 0.9.4",
+ "core-graphics 0.22.3",
+ "foreign-types",
+ "libc",
+ "objc",
+]
+
+[[package]]
+name = "cocoa-foundation"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8c6234cbb2e4c785b456c0644748b1ac416dd045799740356f8363dfe00c93f7"
+dependencies = [
+ "bitflags 1.3.2",
+ "block",
+ "core-foundation 0.9.4",
+ "core-graphics-types 0.1.3",
  "libc",
  "objc",
 ]
@@ -409,7 +441,7 @@ dependencies = [
  "bitflags 2.10.0",
  "block",
  "core-foundation 0.10.1",
- "core-graphics-types",
+ "core-graphics-types 0.2.0",
  "objc",
 ]
 
@@ -490,6 +522,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "core-graphics"
+version = "0.22.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2581bbab3b8ffc6fcbd550bf46c355135d16e9ff2a6ea032ad6b9bf1d7efe4fb"
+dependencies = [
+ "bitflags 1.3.2",
+ "core-foundation 0.9.4",
+ "core-graphics-types 0.1.3",
+ "foreign-types",
+ "libc",
+]
+
+[[package]]
+name = "core-graphics-types"
+version = "0.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "45390e6114f68f718cc7a830514a96f903cccd70d02a8f6d9f643ac4ba45afaf"
+dependencies = [
+ "bitflags 1.3.2",
+ "core-foundation 0.9.4",
+ "libc",
+]
+
+[[package]]
 name = "core-graphics-types"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -519,7 +575,7 @@ checksum = "34ecad23610ad9757664d644e369246edde1803fcb43ed72876565098a5d3828"
 dependencies = [
  "cfg-if 0.1.10",
  "core-foundation-sys 0.7.0",
- "core-graphics",
+ "core-graphics 0.19.2",
  "libc",
  "metal",
  "objc",
@@ -1210,8 +1266,8 @@ checksum = "e198a0ee42bdbe9ef2c09d0b9426f3b2b47d90d93a4a9b0395c4cea605e92dc0"
 dependencies = [
  "bitflags 1.3.2",
  "block",
- "cocoa",
- "core-graphics",
+ "cocoa 0.20.2",
+ "core-graphics 0.19.2",
  "foreign-types",
  "log",
  "objc",
@@ -1420,7 +1476,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "de78eb4a2d47a68f490899aa0516070d7a972f853ec2bb374ab53be0bd39b60f"
 dependencies = [
  "block",
- "cocoa-foundation",
+ "cocoa-foundation 0.2.1",
  "core-foundation 0.10.1",
  "core-media-sys",
  "core-video-sys",

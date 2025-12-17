@@ -9,15 +9,15 @@ mod detector;
 mod pipeline;
 mod head_pose;
 mod gaze;
+mod overlay;
 
 use args::Args;
 use camera::CameraSource;
-
 use output::WindowOutput;
 use pipeline::Pipeline;
 use types::PipelineOutput;
+use overlay::OverlayWindow;
 
-// Factory function
 fn create_pipeline(name: &str) -> Box<dyn Pipeline> {
     match name {
         "detection" => Box::new(inference::FaceDetectionPipeline::new("face_detection.onnx").unwrap()),
@@ -60,7 +60,13 @@ fn main() -> anyhow::Result<()> {
     println!("Window created successfully.");
 
     println!("Starting Pipeline...");
-    println!("Controls: [1] Mesh [2] Detection [3] Head Pose [4] Head Gaze [5] Pupil Gaze");
+    println!("Controls: [1-3] Basic [4] Head Gaze [5] Pupil Gaze [6] Toggle Overlay");
+
+    // State for Overlay
+    let mut show_overlay = false;
+    let mut overlay_window: Option<OverlayWindow> = None;
+    let screen_w = 1440; // Default Mac, ideally get from OS but minifb doesn't support it easily.
+    let screen_h = 900;
 
     // 4. Loop
     while window.is_open() && !window.is_key_down(minifb::Key::Escape) {
@@ -85,6 +91,13 @@ fn main() -> anyhow::Result<()> {
              current_pipeline = create_pipeline("pupil_gaze");
              println!("Switched to: {}", current_pipeline.name());
         }
+        
+        // Toggle Overlay
+        if window.is_key_down(minifb::Key::Key6) {
+             show_overlay = !show_overlay;
+             println!("Overlay Mode: {}", show_overlay);
+             std::thread::sleep(std::time::Duration::from_millis(200)); // Debounce
+        }
 
         if let Ok(mut frame) = camera.capture() {
             // Mirror if requested
@@ -97,6 +110,41 @@ fn main() -> anyhow::Result<()> {
             // Draw logic based on output type
             let mut display_buffer = frame.to_vec(); // clone for drawing
             // Simple drawing (inefficient but works)
+            
+            // --- OVERLAY SIDE CAR LOGIC ---
+            if show_overlay {
+                 if overlay_window.is_none() {
+                     match OverlayWindow::new(screen_w, screen_h) {
+                        Ok(win) => {
+                             overlay_window = Some(win);
+                             println!("Overlay Sidecar Launched");
+                        },
+                        Err(e) => println!("Failed to launch overlay: {}", e),
+                     }
+                 }
+                 
+                 if let Some(win) = overlay_window.as_mut() {
+                     if let Some(PipelineOutput::Gaze { yaw, pitch, .. }) = landmarks.as_ref() {
+                          let gain_x = 25.0; 
+                          let gain_y = 25.0;
+                          
+                          let cx = screen_w as f32 / 2.0;
+                          let cy = screen_h as f32 / 2.0;
+                          
+                          let sx = cx - (yaw * gain_x);
+                          let sy = cy - (pitch * gain_y);
+                          
+                          // Send to Sidecar
+                          let _ = win.update(sx, sy);
+                     }
+                 }
+            } else {
+                 if overlay_window.is_some() {
+                     overlay_window = None;
+                     println!("Overlay Sidecar Closed");
+                 }
+            }
+            // ---------------------
             
             if let Some(output) = landmarks {
                 match output {

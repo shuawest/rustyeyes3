@@ -19,3 +19,4 @@ target/
 
 # Local Logs
 *.log
+overlay_app

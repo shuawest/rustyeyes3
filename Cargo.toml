@@ -14,8 +14,9 @@ thiserror = "1.0"
 anyhow = "1.0"
 clap = { version = "4.4", features = ["derive"] }
 image = "0.25"
+objc = "0.2"
+cocoa = "0.24"
 colored = "2"
 minifb = "0.24"
 ort = { version = "2.0.0-rc.9", features = ["coreml", "download-binaries"] }
 ndarray = "0.15"
-
