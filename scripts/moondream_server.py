@@ -70,20 +70,33 @@ def main():
                     
                     param_found = False
                     for prompt in prompts_for_point:
+                        log_debug(f"Attempting point() with prompt: '{prompt}'")
                         result_dict = model.point(image, prompt)
+                        log_debug(f"point() result type: {type(result_dict)}")
                         points = result_dict.get("points", [])
                         
                         if points and len(points) > 0:
                             # Got coordinates! Use first point
                             # Ensure we cast to float, as API might return strings/decimals
                             try:
-                                x = float(points[0][0])
-                                y = float(points[0][1])
+                                pt = points[0]
+                                log_debug(f"First point structure: {type(pt)} - {pt}")
+                                
+                                if isinstance(pt, dict):
+                                    x = float(pt.get('x', 0))
+                                    y = float(pt.get('y', 0))
+                                elif isinstance(pt, (list, tuple)) and len(pt) >= 2:
+                                    x = float(pt[0])
+                                    y = float(pt[1])
+                                else:
+                                    log_debug(f"Unknown point format: {pt}")
+                                    continue
+                                    
                                 response = f"COORDS:{x:.4f},{y:.4f}"
                                 log_debug(f"point() returned coordinates: ({x:.4f}, {y:.4f}) with prompt '{prompt}'")
                                 param_found = True
                                 break
-                            except (ValueError, TypeError) as cast_err:
+                            except (ValueError, TypeError, KeyError, IndexError) as cast_err:
                                 log_debug(f"Error casting coordinates: {points[0]} - {cast_err}")
                                 continue
                             
@@ -115,6 +128,10 @@ def main():
                     available = [m for m in dir(model) if not m.startswith('_')]
                     raise AttributeError(f"Unknown Moondream API. Available methods: {available[:20]}")
             except Exception as api_error:
+                import traceback
+                log_debug(f"EXCEPTION TYPE: {type(api_error)}")
+                log_debug(f"EXCEPTION REPR: {repr(api_error)}")
+                log_debug(f"TRACEBACK: {traceback.format_exc()}")
                 raise Exception(f"Moondream API error: {api_error}")
             
             # Parse response and create result
