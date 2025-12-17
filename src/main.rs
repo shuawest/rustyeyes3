@@ -189,6 +189,20 @@ fn main() -> anyhow::Result<()> {
         
         let mut display_buffer = latest_realtime_frame.to_vec();
         let (width, height) = latest_realtime_frame.dimensions();
+        
+        // --- MOONDREAM DISPATCH ---
+        if moondream_active {
+             // Clone frame? This might be heavy. dynamic_image from cam_frame?
+             // cam_frame is RgbBuffer.
+             let img = image::DynamicImage::ImageRgb8(latest_realtime_frame.clone());
+             
+             // We drop the result to avoid blocking if channel full? 
+             // Actually, unbounded channel shouldn't block, but we don't want to queue infinite frames.
+             // But for now, let's just send.
+             let _ = tx_frame.send((img, None, None));
+             // Optional: Rate limit logic could go here.
+        }
+
         // --- MOONDREAM ASYNC UPDATE ---
         // Iterate through all available results from the worker
         while let Ok((pt, onnx_data, _cal_id)) = rx_result.try_recv() {
@@ -243,11 +257,11 @@ fn main() -> anyhow::Result<()> {
 
                         // 1. Face Mesh
                         if show_mesh {
-                            if let Some(l) = landmarks {
+                            if let Some(l) = &landmarks {
                                 let (mr, mg, mb) = parse_hex(&config.ui.mesh_color_hex);
                                 let dot_size = config.ui.mesh_dot_size;
                                 
-                                for p in l.points {
+                                for p in &l.points {
                                     let x = p.x as usize;
                                     let y = p.y as usize;
                                     if x < width as usize && y < height as usize {
@@ -290,10 +304,17 @@ fn main() -> anyhow::Result<()> {
                              }
                         }
                         
-                         // 3. Gaze (Blue Ray) - Same logic, maybe different color/length?
+                         // 3. Gaze (Blue Ray) - Originates from Nose if available, else Center
                         if show_gaze {
-                             let cx = width as f32 / 2.0;
-                             let cy = height as f32 / 2.0;
+                             let (cx, cy) = if let Some(l) = &landmarks {
+                                 if l.points.len() > 4 {
+                                     (l.points[4].x, l.points[4].y) // Nose Tip
+                                 } else {
+                                     (width as f32 / 2.0, height as f32 / 2.0)
+                                 }
+                             } else {
+                                 (width as f32 / 2.0, height as f32 / 2.0)
+                             };
                              
                              let len = config.defaults.head_pose_length * 1.5; // Gaze usually projects further
                             let end_x = cx + (yaw.to_radians().sin() * len);
@@ -397,7 +418,6 @@ fn main() -> anyhow::Result<()> {
                 ("5", "Mirror", mirror_mode),
             ];
             
-            // Adjust start position for larger text
             let mut y_start = height as usize / 2 - 150;
             let menu_scale = config.ui.menu_scale;
             let line_height = 12 * menu_scale;
@@ -428,6 +448,30 @@ fn main() -> anyhow::Result<()> {
                 y_start += line_height;
             }
 
+            y_start += line_height; // Spacer
+            
+            // --- HUD STATS ---
+            // Draw Gaze / Moondream Coordinates
+            if let Some(out) = &last_pipeline_output {
+               if let PipelineOutput::Gaze { yaw, pitch, .. } = out {
+                   let text = format!("Gaze: {:.1}, {:.1}", yaw, pitch);
+                   font::draw_text_line(&mut display_buffer, width as usize, height as usize, 10, y_start, &text, (200, 200, 200), menu_scale);
+                   y_start += line_height;
+               }
+            }
+            
+            if moondream_active {
+                if let Some(pt) = moondream_result {
+                    let text = format!("Moon: ({:.2}, {:.2})", pt.x, pt.y);
+                    font::draw_text_line(&mut display_buffer, width as usize, height as usize, 10, y_start, &text, (255, 215, 0), menu_scale);
+                    y_start += line_height;
+                } else {
+                    let text = "Moon: Waiting...";
+                     font::draw_text_line(&mut display_buffer, width as usize, height as usize, 10, y_start, &text, (100, 100, 100), menu_scale);
+                     y_start += line_height;
+                }
+            }
+
             // --- WINDOW UPDATE ---
             // CRITICAL: Must be called to show the frame!
             window.update(&display_buffer)?;
@@ -444,5 +488,19 @@ fn parse_hex(hex: &str) -> (u8, u8, u8) {
         (r, g, b)
     } else {
         (255, 0, 0) // Default Red
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_hex() {
+        assert_eq!(parse_hex("#FF0000"), (255, 0, 0));
+        assert_eq!(parse_hex("#00FF00"), (0, 255, 0));
+        assert_eq!(parse_hex("#0000FF"), (0, 0, 255));
+        assert_eq!(parse_hex("#FFFFFF"), (255, 255, 255));
+        assert_eq!(parse_hex("invalid"), (255, 0, 0)); // Fallback
     }
 }
