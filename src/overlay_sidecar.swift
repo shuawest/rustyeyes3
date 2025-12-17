@@ -3,6 +3,8 @@ import Foundation
 
 // Global state
 var cursorPoint: NSPoint = NSPoint(x: 0, y: 0)
+var moondreamPoint: NSPoint? = nil
+var capturedPoint: NSPoint? = nil
 var showOverlay: Bool = true
 
 class OverlayView: NSView {
@@ -32,24 +34,83 @@ class OverlayView: NSView {
         }
         path.stroke()
         
-        // 2. Draw Cursor
-        // Invert Y because Cocoa is bottom-up vs our Top-Down logic
-        // We will assume Rust sends Top-Down coordinates (0,0 is Top-Left).
-        // So Cocoa Y = Height - InputY
-        let drawY = screenH - cursorPoint.y
-        let drawX = cursorPoint.x
+        // 2. Real-time Gaze (Blue/Red - Flying)
+        // Invert Y
+        let gazeY = screenH - cursorPoint.y
+        let gazeX = cursorPoint.x
         
         // Large Circle (Blue, Alpha 0.5)
         let lRadius: CGFloat = 50.0
-        let lRect = NSRect(x: drawX - lRadius, y: drawY - lRadius, width: lRadius * 2, height: lRadius * 2)
+        let lRect = NSRect(x: gazeX - lRadius, y: gazeY - lRadius, width: lRadius * 2, height: lRadius * 2)
         NSColor(red: 0.0, green: 0.0, blue: 1.0, alpha: 0.4).setFill()
         NSBezierPath(ovalIn: lRect).fill()
         
         // Center Dot (Red, Opaque)
         let sRadius: CGFloat = 5.0
-        let sRect = NSRect(x: drawX - sRadius, y: drawY - sRadius, width: sRadius * 2, height: sRadius * 2)
+        let sRect = NSRect(x: gazeX - sRadius, y: gazeY - sRadius, width: sRadius * 2, height: sRadius * 2)
         NSColor.red.setFill()
         NSBezierPath(ovalIn: sRect).fill()
+        
+        // 3. Captured ONNX Gaze (Green/White) - "Where ONNX thought we looked at frame time"
+        if let cap = capturedPoint {
+            let capY = screenH - cap.y
+            let capX = cap.x
+            
+            let cRadius: CGFloat = 40.0
+            let cRect = NSRect(x: capX - cRadius, y: capY - cRadius, width: cRadius * 2, height: cRadius * 2)
+            NSColor(red: 0.0, green: 1.0, blue: 0.0, alpha: 0.5).setFill() // Green
+            NSBezierPath(ovalIn: cRect).fill()
+            
+            let csRadius: CGFloat = 5.0
+            let csRect = NSRect(x: capX - csRadius, y: capY - csRadius, width: csRadius * 2, height: csRadius * 2)
+            NSColor.white.setFill()
+            NSBezierPath(ovalIn: csRect).fill()
+        }
+
+        // 4. Moondream Gaze (Cyan/Gold)
+        if let md = moondreamPoint {
+            let mdY = screenH - md.y
+            let mdX = md.x
+            
+            // Large Circle (Cyan, Alpha 0.6)
+            let mRadius: CGFloat = 40.0
+            let mRect = NSRect(x: mdX - mRadius, y: mdY - mRadius, width: mRadius * 2, height: mRadius * 2)
+            NSColor(red: 0.0, green: 1.0, blue: 1.0, alpha: 0.6).setFill() // Cyan
+            NSBezierPath(ovalIn: mRect).fill()
+            
+            // Center Dot (Gold)
+            let msRadius: CGFloat = 6.0
+            let msRect = NSRect(x: mdX - msRadius, y: mdY - msRadius, width: msRadius * 2, height: msRadius * 2)
+            NSColor(red: 1.0, green: 0.84, blue: 0.0, alpha: 1.0).setFill()
+            NSBezierPath(ovalIn: msRect).fill()
+        }
+        
+        // 5. HUD Text (4 Corners + Center)
+        let font = NSFont.monospacedSystemFont(ofSize: 14, weight: .bold)
+        let attrs: [NSAttributedString.Key: Any] = [
+            .font: font,
+            .foregroundColor: NSColor.white,
+            .strokeColor: NSColor.black,
+            .strokeWidth: -2.0
+        ]
+        
+        let info = [
+            String(format: "REALTIME:  %04.0f, %04.0f", cursorPoint.x, cursorPoint.y),
+            capturedPoint != nil ? String(format: "CAPTURED:  %04.0f, %04.0f", capturedPoint!.x, capturedPoint!.y) : "CAPTURED:  ----, ----",
+            moondreamPoint != nil ? String(format: "MOONDREAM: %04.0f, %04.0f", moondreamPoint!.x, moondreamPoint!.y) : "MOONDREAM: ----, ----"
+        ].joined(separator: "\n")
+        
+        let offsets = [
+            NSPoint(x: 20, y: screenH - 120), // TL (Lowered from 80)
+            NSPoint(x: screenW - 250, y: screenH - 120), // TR
+            NSPoint(x: 20, y: 40), // BL (Lowered to 40)
+            NSPoint(x: screenW - 250, y: 40), // BR
+            NSPoint(x: screenW/2 - 100, y: screenH/2 - 40) // Center
+        ]
+        
+        for p in offsets {
+            info.draw(at: p, withAttributes: attrs)
+        }
     }
 }
 
@@ -80,13 +141,37 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         DispatchQueue.global(qos: .userInteractive).async {
             while let line = readLine(strippingNewline: true) {
                 let parts = line.split(separator: " ")
-                if parts.count >= 2, 
-                   let x = Double(parts[0]), 
-                   let y = Double(parts[1]) {
-                    
-                    DispatchQueue.main.async {
-                        cursorPoint = NSPoint(x: x, y: y)
-                        view.needsDisplay = true
+                
+                // Protocol: "G x y" or "M x y"
+                // Legacy support "x y" -> G
+                if parts.count >= 2 {
+                    if parts[0] == "G" && parts.count >= 3 {
+                         if let x = Double(parts[1]), let y = Double(parts[2]) {
+                             DispatchQueue.main.async {
+                                 cursorPoint = NSPoint(x: x, y: y)
+                                 view.needsDisplay = true
+                             }
+                         }
+                    } else if parts[0] == "M" && parts.count >= 3 {
+                         if let x = Double(parts[1]), let y = Double(parts[2]) {
+                             DispatchQueue.main.async {
+                                 moondreamPoint = NSPoint(x: x, y: y)
+                                 view.needsDisplay = true
+                             }
+                         }
+                    } else if parts[0] == "C" && parts.count >= 3 {
+                         if let x = Double(parts[1]), let y = Double(parts[2]) {
+                             DispatchQueue.main.async {
+                                 capturedPoint = NSPoint(x: x, y: y)
+                                 view.needsDisplay = true
+                             }
+                         }
+                    } else if let x = Double(parts[0]), let y = Double(parts[1]) {
+                        // Legacy fallback
+                        DispatchQueue.main.async {
+                            cursorPoint = NSPoint(x: x, y: y)
+                            view.needsDisplay = true
+                        }
                     }
                 }
             }

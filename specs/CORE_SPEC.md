@@ -45,16 +45,30 @@ The system shall support runtime-switchable pipelines:
 - **Benefit**: Provides higher precision tracking of eye movements independent of head rotation, without requiring heavy/unavailable external gaze models.
 - **Fallback**: Robust inputs (Mesh + CV) ensure availability without complex dependencies.
 
+#### 1.2.6. Moondream Gaze (Key 7)
+
+- **Type**: Calibration / Validation.
+- **Function**: Periodically analyzes the video frame using a Vision-Language Model (VLM) to verify gaze direction against the ONNX pipeline.
+- **Output**:
+  - **Cyan Circle**: The model's predicted gaze point (updates at model inference speed).
+  - **Green Circle**: The ONNX gaze point captured _at the exact moment_ the VLM frame was taken (Ground Truth reference).
+  - **Console Logs**: Prints tracking data for calibration analysis.
+
 ### 1.3. User Interface (UI)
 
 - **Windowing**: A native window displaying the video feed with overlaid graphics.
 - **Controls**:
   - `0`: Switch to Combined Mode (Mesh + Gaze + Overlay) [Default].
-  - `1-5`: Switch Pipelines instantaneously.
-  - `6`: Toggle Overlay (macOS Only).
+  - `1-5`: Switch Pipelines instantaneously (Exclusive Radio Button behavior).
+  - `6`: **Toggle** Overlay (Show/Hide macOS Sidecar). Repeated presses toggle visibility.
+  - `7`: **Toggle** Moondream Mode. Repeated presses start/stop the background worker.
   - `ESC`: Quit application.
 - **Visuals**:
-  - Clear, high-contrast overlays (Red for Mesh, Green for Box, Cyan for Gaze).
+  - Clear, high-contrast overlays:
+    - **Red**: Face Mesh.
+    - **Blue**: Real-time Gaze.
+    - **Cyan**: Moondream Prediction (Simulated in v0.1).
+    - **Green**: Calibration Reference (Captured ONNX).
   - Minimal latency rendering.
 
 ## 2. Technical Requirements

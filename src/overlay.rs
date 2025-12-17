@@ -17,9 +17,23 @@ impl OverlayWindow {
         Ok(Self { process })
     }
 
-    pub fn update(&mut self, x: f32, y: f32) -> Result<()> {
+    pub fn update_gaze(&mut self, x: f32, y: f32) -> Result<()> {
         if let Some(stdin) = self.process.stdin.as_mut() {
-            writeln!(stdin, "{} {}", x, y)?;
+            writeln!(stdin, "G {} {}", x, y)?;
+        }
+        Ok(())
+    }
+
+    pub fn update_moondream(&mut self, x: f32, y: f32) -> Result<()> {
+        if let Some(stdin) = self.process.stdin.as_mut() {
+            writeln!(stdin, "M {} {}", x, y)?;
+        }
+        Ok(())
+    }
+
+    pub fn update_captured_onnx(&mut self, x: f32, y: f32) -> Result<()> {
+        if let Some(stdin) = self.process.stdin.as_mut() {
+            writeln!(stdin, "C {} {}", x, y)?;
         }
         Ok(())
     }

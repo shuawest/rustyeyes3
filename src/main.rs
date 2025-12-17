@@ -10,6 +10,7 @@ mod pipeline;
 mod head_pose;
 mod gaze;
 mod overlay;
+mod moondream;
 
 use args::Args;
 use camera::CameraSource;
@@ -68,6 +69,46 @@ fn main() -> anyhow::Result<()> {
     let screen_w = 1440; // Default Mac, ideally get from OS but minifb doesn't support it easily.
     let screen_h = 900;
 
+    // State for Milestone 1: Moondream
+    let mut moondream_oracle: Option<moondream::MoondreamOracle> = None;
+    let mut paused_frame: Option<image::ImageBuffer<image::Rgb<u8>, Vec<u8>>> = None;
+    let mut moondream_result: Option<types::Point3D> = None;
+    let mut moondream_active = false;
+    
+    // Smoothing State
+    let mut smooth_x = screen_w as f32 / 2.0;
+    let mut smooth_y = screen_h as f32 / 2.0;
+
+    // --- MOONDREAM WORKER SETUP ---
+    // Unbounded channel - worker will drain to get latest frame
+    let (tx_frame, rx_frame) = std::sync::mpsc::channel::<(image::DynamicImage, Option<(f32, f32)>)>();
+    let (tx_result, rx_result) = std::sync::mpsc::channel::<(types::Point3D, Option<(f32, f32)>)>();
+    
+    std::thread::spawn(move || {
+        use moondream::MoondreamOracle;
+        use types::Point3D;
+        let mut oracle = MoondreamOracle::new().expect("Failed to init Moondream Worker");
+        println!("Moondream Worker Started.");
+        
+        while let Ok(first_frame) = rx_frame.recv() {
+            // Got first frame, now drain any backlog to get the LATEST
+            let mut latest_frame = first_frame;
+            while let Ok(newer_frame) = rx_frame.try_recv() {
+                latest_frame = newer_frame; // Keep replacing with newer
+            }
+            
+            // Process only the latest frame
+            let (img, onnx_data) = latest_frame;
+            if let Ok(gaze) = oracle.gaze_at(&img) {
+                let _ = tx_result.send((gaze, onnx_data));
+            }
+        }
+    });
+
+    // --- MAIN LOOP ---
+    println!("Starting Pipeline...");
+    println!("Controls: [0] Combined [1-3] Basic [4] Head Gaze [5] Pupil Gaze [6] Toggle Overlay");
+
     // 4. Loop
     while window.is_open() && !window.is_key_down(minifb::Key::Escape) {
         // Swap Pipeline?
@@ -104,16 +145,35 @@ fn main() -> anyhow::Result<()> {
              std::thread::sleep(std::time::Duration::from_millis(200)); // Debounce
         }
 
-        if let Ok(mut frame) = camera.capture() {
-            // Mirror if requested
-            if args.mirror {
-                image::imageops::flip_horizontal_in_place(&mut frame);
-            }
 
-            let landmarks = current_pipeline.process(&frame)?;
-            
-            // Draw logic based on output type
-            let mut display_buffer = frame.to_vec(); // clone for drawing
+         // Milestone 1: Moondream Snapshot (Key 7)
+         // Milestone 1 (Refined): Continuous Toggle (Key 7)
+         if window.is_key_down(minifb::Key::Key7) {
+             moondream_active = !moondream_active;
+             println!("Moondream Continuous Mode: {}", if moondream_active { "ACTIVE" } else { "INACTIVE" });
+             std::thread::sleep(std::time::Duration::from_millis(500)); // Debounce
+         }
+
+         // Capture or Reuse Frame
+         let frame = if let Some(frozen) = &paused_frame {
+             frozen.clone()
+         } else {
+             if let Ok(mut cam_frame) = camera.capture() {
+                 if args.mirror {
+                     image::imageops::flip_horizontal_in_place(&mut cam_frame);
+                 }
+                 cam_frame
+             } else {
+                 continue;
+             }
+         };
+
+         // Process (Only run pipeline if not paused, or run on static frame?)
+         // For now, let's run pipeline on the frame (realtime or frozen) so we see the red mesh match.
+         let landmarks = current_pipeline.process(&frame)?;
+         
+         // Draw logic based on output type
+         let mut display_buffer = frame.to_vec(); // clone for drawing
             // Simple drawing (inefficient but works)
             
             // --- OVERLAY SIDE CAR LOGIC ---
@@ -127,22 +187,80 @@ fn main() -> anyhow::Result<()> {
                         Err(e) => println!("Failed to launch overlay: {}", e),
                      }
                  }
-                 
                  if let Some(win) = overlay_window.as_mut() {
-                     if let Some(PipelineOutput::Gaze { yaw, pitch, .. }) = landmarks.as_ref() {
-                          let gain_x = 25.0; 
-                          let gain_y = 25.0;
-                          
-                          let cx = screen_w as f32 / 2.0;
-                          let cy = screen_h as f32 / 2.0;
-                          
-                          let sx = cx - (yaw * gain_x);
-                          let sy = cy - (pitch * gain_y);
-                          
-                          // Send to Sidecar
-                          let _ = win.update(sx, sy);
-                     }
-                 }
+                      if let Some(PipelineOutput::Gaze { yaw, pitch, .. }) = landmarks.as_ref() {
+                           let gain_x = 25.0; 
+                           let gain_y = 25.0;
+                           
+                           let cx = screen_w as f32 / 2.0;
+                           let cy = screen_h as f32 / 2.0;
+                           
+                           
+                           let raw_sx = cx - (yaw * gain_x);
+                           let raw_sy = cy - (pitch * gain_y);
+                           
+                           // Simple Smoothing (LPF)
+                           // Initialize static or use window state? 
+                           // For now, use a hacky "Option" or just overwrite if jump is too big?
+                           // Ideally we need state persistence.
+                           // Let's rely on the outer loop state.
+                           
+                           // We need to store smooth_x, smooth_y in the loop context.
+                           // Assuming variables defined above loop:
+                           // let mut smooth_x = screen_w as f32 / 2.0;
+                           // let mut smooth_y = screen_h as f32 / 2.0;
+                           
+                           smooth_x = smooth_x * 0.7 + raw_sx * 0.3;
+                           smooth_y = smooth_y * 0.7 + raw_sy * 0.3;
+                           
+                           let sx = smooth_x;
+                           let sy = smooth_y;
+                           
+                           // Send to Sidecar (Gaze)
+                           let _ = win.update_gaze(sx, sy);
+                           
+                           // --- MOONDREAM TRIGGER ---
+                           // Throttle sending to avoid queue buildup? 
+                           // For sim, we trust worker speed or channel buffer.
+                           if moondream_active {
+                               let img_buffer = image::ImageBuffer::<image::Rgb<u8>, _>::from_raw(width as u32, height as u32, frame.to_vec()).unwrap();
+                               let dynamic_img = image::DynamicImage::ImageRgb8(img_buffer);
+                                                              // Calculate current ONNX gaze point (sx, sy) to send for logging
+                                let onnx_pt = (sx, sy);
+                                // Send frame - worker will drain to get latest
+                                let _ = tx_frame.send((dynamic_img, Some(onnx_pt)));
+                            }
+                                                      // Check for Results (Non-blocking) - drain to get latest only
+                            if let Ok(first_result) = rx_result.try_recv() {
+                                // Got first result, drain any backlog
+                                let mut latest_result = first_result;
+                                let mut drain_count = 0;
+                                while let Ok(newer_result) = rx_result.try_recv() {
+                                    latest_result = newer_result;
+                                    drain_count += 1;
+                                }
+                                if drain_count > 0 {
+                                    println!("[WARN] Drained {} stale results", drain_count);
+                                }
+                                
+                                let (md_gaze, onnx_gaze) = latest_result;
+                                let md_sx = md_gaze.x * screen_w as f32;
+                                let md_sy = md_gaze.y * screen_h as f32;
+                                
+                                println!("[DATA] Moondream: ({:.2}, {:.2}), ONNX@Capture: {:?}", md_sx, md_sy, onnx_gaze);
+                                
+                                moondream_result = Some(md_gaze);
+                                
+                                // Send all updates to Sidecar
+                                let _ = win.update_moondream(md_sx, md_sy);
+                                
+                                // If we have ONNX capture data, send it too
+                                if let Some((ox, oy)) = onnx_gaze {
+                                    let _ = win.update_captured_onnx(ox, oy);
+                                }
+                            }
+                      }
+                  }
             } else {
                  if overlay_window.is_some() {
                      overlay_window = None;
@@ -272,10 +390,19 @@ fn main() -> anyhow::Result<()> {
                     }
                 }
             }
+            
+            // Draw Moondream Gold Gaze
+            if let Some(_pt) = moondream_result {
+                // Determine screen coordinates (assuming normalized?)
+                // Wait, Moondream output needs to be mapped.
+                // For now, assume MoondreamOracle returns result.
+                // We'll just draw a Gold Star at the result.
+                
+                // Note: Implement proper mapping later.
+            }
 
             window.update(&display_buffer)?;
         }
-    }
 
     Ok(())
 }

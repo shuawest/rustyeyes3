@@ -11,8 +11,8 @@ pub struct Args {
     #[arg(long)]
     pub model: Option<String>,
 
-    /// Mirror the camera output
-    #[arg(long, default_value_t = false)]
+    /// Mirror the camera output (Selfie Mode)
+    #[arg(long, default_value_t = true)]
     pub mirror: bool,
 
     /// List available cameras

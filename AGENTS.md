@@ -41,7 +41,8 @@ cargo run --release --bin rusty-eyes -- --cam-index 0 --mirror
 
 Detailed project specifications are organized in the `specs/` directory:
 
-- **[CORE_SPEC.md](specs/CORE_SPEC.md)**: Core functional requirements, pipelines, camera handling, and UI.
-- **[CALIBRATION_SPEC.md](specs/CALIBRATION_SPEC.md)**: Moondream2-based calibration strategy and milestones.
+- [Core Specification](specs/CORE_SPEC.md) - System architecture, pipelines, and **UI Controls (including Moondream/Overlay Toggles)**.
+- [Calibration Specification](specs/CALIBRATION_SPEC.md) - Moondream2 calibration strategy.
+- [Overlay Specification](specs/OVERLAY_SPEC.md) - Triple Cursor Logic and HUD.
 
 See these documents for in-depth behaviors and architecture.
