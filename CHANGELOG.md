@@ -19,6 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Unreleased - HUD Refinement**:
   - _Change_: Restored 5-point HUD stats (Corners + Center) in Overlay. Refined positioning: Vertically centered Menu, shifted right-side stats closer to edge. Updated Menu style to UPPERCASE labels to match HUD font aesthetic.
   - _Intent_: Restore debug visibility, center controls, and ensure a unified visual design.
+- **Unreleased - Moondream API return format fix**:
+  - _Change_: Modified `moondream_server.py` to robustly handle `model.point()` return values (supporting both list-of-lists and list-of-dicts). Added detailed exception logging.
+  - _Intent_: Fix `Moondream API error: 0` caused by `KeyError: 0` when accessing dictionary results as lists.
 - **Unreleased - Moondream Stabilization**:
   - _Change_: Modified `moondream_server.py` to iterate through all logic prompts to prevent double-inference penalties. Updated visualization flow: Immediate Green/Red dot on capture, Green/Yellow dot upon completion + Cyan Moondream dot. Added "MOON: WATCHING..." status.
   - _Intent_: Fix "no coordinates" errors, reduce latency, and provide immediate visual feedback as requested.
