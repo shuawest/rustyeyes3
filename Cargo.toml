@@ -19,6 +19,7 @@ objc = "0.2"
 cocoa = "0.24"
 colored = "2"
 minifb = "0.24"
+rusttype = "0.9"
 ort = { version = "2.0.0-rc.9", features = ["coreml", "download-binaries"] }
 ndarray = "0.15"
 

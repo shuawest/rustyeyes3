@@ -1,17 +1,17 @@
 {
   "defaults": {
-    "show_mesh": true,
+    "show_mesh": false,
     "show_pose": true,
-    "show_gaze": false,
-    "show_overlay": true,
+    "show_gaze": true,
     "mirror_mode": true,
+    "show_overlay": true,
     "moondream_active": false,
     "head_pose_length": 150.0
   },
   "ui": {
     "menu_scale": 2,
     "font_size_pt": 12,
-    "font_family": "Monospace",
+    "font_family": "Calibri",
     "mesh_dot_size": 2,
     "mesh_color_hex": "#FF0000"
   }

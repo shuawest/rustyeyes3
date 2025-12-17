@@ -6,6 +6,8 @@ var cursorPoint: NSPoint = NSPoint(x: 0, y: 0)
 var moondreamPoint: NSPoint? = nil
 var capturedPoint: NSPoint? = nil
 var showOverlay: Bool = true
+var customFontName: String = "Monospace"
+var customFontSize: CGFloat = 14.0
 
 class OverlayView: NSView {
     override func draw(_ dirtyRect: NSRect) {
@@ -86,7 +88,12 @@ class OverlayView: NSView {
         }
         
         // 5. HUD Text (4 Corners + Center)
-        let font = NSFont.monospacedSystemFont(ofSize: 14, weight: .bold)
+        let font: NSFont
+        if customFontName == "Monospace" {
+            font = NSFont.monospacedSystemFont(ofSize: customFontSize, weight: .bold)
+        } else {
+             font = NSFont(name: customFontName, size: customFontSize) ?? NSFont.monospacedSystemFont(ofSize: customFontSize, weight: .bold)
+        }
         let attrs: [NSAttributedString.Key: Any] = [
             .font: font,
             .foregroundColor: NSColor.white,
@@ -166,6 +173,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                                  view.needsDisplay = true
                              }
                          }
+                    } else if parts[0] == "F" && parts.count >= 3 {
+                        // Protocol: F <FamilyName> <Size>
+                        // Note: Family Name might have spaces? Protocol needs to handle that.
+                        // For now, assume single word or simple join.
+                        
+                        let size = Double(parts.last!) ?? 14.0
+                        let nameParts = parts[1..<parts.count-1]
+                        let name = nameParts.joined(separator: " ")
+                        
+                        DispatchQueue.main.async {
+                            // Update Global Font State
+                            customFontName = String(name)
+                            customFontSize = CGFloat(size)
+                            view.needsDisplay = true
+                        }
                     } else if let x = Double(parts[0]), let y = Double(parts[1]) {
                         // Legacy fallback
                         DispatchQueue.main.async {

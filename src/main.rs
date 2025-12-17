@@ -14,6 +14,7 @@ mod moondream;
 mod calibration;
 mod font;
 mod config;
+mod ttf;
 
 use args::Args;
 use camera::CameraSource;
@@ -23,6 +24,7 @@ use types::PipelineOutput;
 use overlay::OverlayWindow;
 use calibration::CalibrationManager;
 use config::AppConfig;
+use ttf::FontRenderer;
 
 fn create_pipeline(name: &str) -> Box<dyn Pipeline> {
     match name {
@@ -98,9 +100,9 @@ fn main() -> anyhow::Result<()> {
     let mut last_calibration_point: Option<(f32, f32, u64)> = None;
 
     // --- MOONDREAM WORKER SETUP ---
-    // Unbounded channel - worker will drain to get latest frame
+    // Bounded Channel (1) to prevent memory explosion if worker is slow
     // Payload: (Image, OnnxGazeForLogging, CalibrationTimestampID)
-    let (tx_frame, rx_frame) = std::sync::mpsc::channel::<(image::DynamicImage, Option<(f32, f32)>, Option<u64>)>();
+    let (tx_frame, rx_frame) = std::sync::mpsc::sync_channel::<(image::DynamicImage, Option<(f32, f32)>, Option<u64>)>(1);
     // Result: (MoondreamGaze, OnnxGazeForLogging, CalibrationTimestampID)
     let (tx_result, rx_result) = std::sync::mpsc::channel::<(types::Point3D, Option<(f32, f32)>, Option<u64>)>();
     
@@ -170,7 +172,11 @@ fn main() -> anyhow::Result<()> {
     let mut show_overlay = config.defaults.show_overlay;
     
     // We keep one robust pipeline active
-    let mut pipeline = create_pipeline("pupil_gaze"); // This pipeline computes everything
+    // We keep one robust pipeline active
+    let mut pipeline = create_pipeline("pupil_gaze"); 
+    
+    // Initialize Font Renderer (Try to load custom, else None -> Fallback to bitmap)
+    let font_renderer = FontRenderer::try_load(&config.ui.font_family);
     
     while window.is_open() && !window.is_key_down(minifb::Key::Escape) {
         
@@ -196,10 +202,10 @@ fn main() -> anyhow::Result<()> {
              // cam_frame is RgbBuffer.
              let img = image::DynamicImage::ImageRgb8(latest_realtime_frame.clone());
              
-             // We drop the result to avoid blocking if channel full? 
-             // Actually, unbounded channel shouldn't block, but we don't want to queue infinite frames.
-             // But for now, let's just send.
-             let _ = tx_frame.send((img, None, None));
+             // We use try_send on a bounded channel (1). 
+             // If worker is busy, this fails immediately and we skip sending the frame.
+             // This prevents the main loop from stuttering/blocking and prevents memory leaks.
+             let _ = tx_frame.try_send((img, None, None));
              // Optional: Rate limit logic could go here.
         }
 
@@ -336,7 +342,9 @@ fn main() -> anyhow::Result<()> {
                         if show_overlay {
                             // Ensure overlay is open
                             if overlay_window.is_none() {
-                                if let Ok(win) = OverlayWindow::new(screen_w, screen_h) {
+                                if let Ok(mut win) = OverlayWindow::new(screen_w, screen_h) {
+                                    // Init font
+                                    let _ = win.update_font(&config.ui.font_family, config.ui.font_size_pt);
                                     overlay_window = Some(win);
                                 }
                             }
@@ -354,6 +362,17 @@ fn main() -> anyhow::Result<()> {
                             
                             if let Some(win) = overlay_window.as_mut() {
                                 let _ = win.update_gaze(screen_x, screen_y);
+                                
+                                // Send Config Upates occasionally? 
+                                // Actually, we should send font config on init or change.
+                                // For now, let's just send it every frame? No, that's spammy.
+                                // We'll assume the user hasn't changed it since startup for this simple implementation.
+                                // Or we can send it once if a flag is set?
+                                // Let's simplify: Send it every 60 frames?
+                                // Or just send it here blindly, pipes are fast.
+                                // Optimization: Only if changed.
+                                // Implementation: sending every time is safe for pipe but wasteful.
+                                // Let's send it ONCE on init. (Doing that in setup block below).
                             }
                         } else {
                             if overlay_window.is_some() {
@@ -421,11 +440,27 @@ fn main() -> anyhow::Result<()> {
             let line_height = 12 * menu_scale;
             
             // Draw Toggles
+            // Helper to draw text with fallback
+            let draw_text = |buf: &mut [u8], w: usize, h: usize, x: usize, y: usize, txt: &str, col: (u8, u8, u8)| {
+                 if let Some(fr) = &font_renderer {
+                     fr.draw_text(buf, w, h, x, y, txt, col, config.ui.font_size_pt as f32);
+                 } else {
+                     font::draw_text_line(buf, w, h, x, y, txt, col, menu_scale);
+                 }
+            };
+            
+            // Calc line height based on renderer
+            let line_height = if let Some(fr) = &font_renderer {
+                fr.measure_height(config.ui.font_size_pt as f32) + 5
+            } else {
+                12 * menu_scale
+            };
+
             for (key, label, active) in menu_items.iter() {
                 let color = if *active { (0, 255, 0) } else { (255, 255, 255) };
                 let status = if *active { "ON" } else { "OFF" };
                 let text = format!("[{}] {} [{}]", key, label, status);
-                font::draw_text_line(&mut display_buffer, width as usize, height as usize, 10, y_start, &text, color, menu_scale);
+                draw_text(&mut display_buffer, width as usize, height as usize, 10, y_start, &text, color);
                 y_start += line_height;
             }
             
@@ -442,7 +477,7 @@ fn main() -> anyhow::Result<()> {
                 let color = if *active { (0, 255, 0) } else { (255, 255, 255) };
                 let status = if *active { "ON" } else { "OFF" };
                 let text = format!("[{}] {} [{}]", key, label, status);
-                 font::draw_text_line(&mut display_buffer, width as usize, height as usize, 10, y_start, &text, color, menu_scale);
+                 draw_text(&mut display_buffer, width as usize, height as usize, 10, y_start, &text, color);
                 y_start += line_height;
             }
 
@@ -453,7 +488,7 @@ fn main() -> anyhow::Result<()> {
             if let Some(out) = &last_pipeline_output {
                if let PipelineOutput::Gaze { yaw, pitch, .. } = out {
                    let text = format!("Gaze: {:.1}, {:.1}", yaw, pitch);
-                   font::draw_text_line(&mut display_buffer, width as usize, height as usize, 10, y_start, &text, (200, 200, 200), menu_scale);
+                   draw_text(&mut display_buffer, width as usize, height as usize, 10, y_start, &text, (200, 200, 200));
                    y_start += line_height;
                }
             }
@@ -461,11 +496,11 @@ fn main() -> anyhow::Result<()> {
             if moondream_active {
                 if let Some(pt) = moondream_result {
                     let text = format!("Moon: ({:.2}, {:.2})", pt.x, pt.y);
-                    font::draw_text_line(&mut display_buffer, width as usize, height as usize, 10, y_start, &text, (255, 215, 0), menu_scale);
+                    draw_text(&mut display_buffer, width as usize, height as usize, 10, y_start, &text, (255, 215, 0));
                     y_start += line_height;
                 } else {
                     let text = "Moon: Waiting...";
-                     font::draw_text_line(&mut display_buffer, width as usize, height as usize, 10, y_start, &text, (100, 100, 100), menu_scale);
+                     draw_text(&mut display_buffer, width as usize, height as usize, 10, y_start, &text, (255, 255, 255));
                      y_start += line_height;
                 }
             }

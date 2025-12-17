@@ -37,6 +37,13 @@ impl OverlayWindow {
         }
         Ok(())
     }
+
+    pub fn update_font(&mut self, family: &str, size: u32) -> Result<()> {
+        if let Some(stdin) = self.process.stdin.as_mut() {
+            writeln!(stdin, "F {} {}", family, size)?;
+        }
+        Ok(())
+    }
 }
 
 impl Drop for OverlayWindow {
