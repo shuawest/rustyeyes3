@@ -259,7 +259,12 @@ fn main() -> anyhow::Result<()> {
                     }
                 },
                 minifb::Key::Key9 => {
-                    // Toggle Calibration
+                    calibration_mode = !calibration_mode;
+                    if calibration_mode {
+                        println!("Calibration Mode: ON");
+                    } else {
+                        println!("Calibration Mode: OFF");
+                    }
                 },
                 _ => {}
             }
@@ -492,6 +497,9 @@ fn main() -> anyhow::Result<()> {
                 ("2", "Head Pose", show_pose),
                 ("3", "Eye Gaze", show_gaze),
                 ("5", "Mirror", mirror_mode),
+                ("6", "Overlay", show_overlay),
+                ("7", "Moondream", moondream_active),
+                ("9", "Calibration", calibration_mode),
             ];
             
             let mut y_start = height as usize / 2 - 150;

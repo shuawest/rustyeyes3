@@ -10,8 +10,8 @@
   },
   "ui": {
     "menu_scale": 2,
-    "font_size_pt": 12,
-    "font_family": "Geneva",
+    "font_size_pt": 14,
+    "font_family": "Monospace",
     "mesh_dot_size": 2,
     "mesh_color_hex": "#FF0000"
   }
