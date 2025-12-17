@@ -13,6 +13,7 @@ mod overlay;
 mod moondream;
 mod calibration;
 mod font;
+mod config;
 
 use args::Args;
 use camera::CameraSource;
@@ -21,6 +22,7 @@ use pipeline::Pipeline;
 use types::PipelineOutput;
 use overlay::OverlayWindow;
 use calibration::CalibrationManager;
+use config::AppConfig;
 
 fn create_pipeline(name: &str) -> Box<dyn Pipeline> {
     match name {
@@ -47,6 +49,9 @@ fn main() -> anyhow::Result<()> {
         return Ok(());
     }
 
+    // 0. Load Config
+    let config = AppConfig::load()?;
+
     // 1. Setup Camera
     let index = args.cam_index as usize;
     let mut camera = CameraSource::new(index)?;
@@ -71,7 +76,7 @@ fn main() -> anyhow::Result<()> {
     println!("Controls: [0] Combined [1-3] Basic [4] Head Gaze [5] Pupil Gaze [6] Toggle Overlay [7] Moondream [9] Calibration");
 
     // State for Overlay
-    let mut show_overlay = true;
+    // let mut show_overlay = true; // Moved to config above
     let mut overlay_window: Option<OverlayWindow> = None;
     let screen_w = 1440; // Default Mac, ideally get from OS but minifb doesn't support it easily.
     let screen_h = 900;
@@ -157,11 +162,12 @@ fn main() -> anyhow::Result<()> {
     // 4. Loop
     let mut last_pipeline_output: Option<PipelineOutput> = None;
     
-    // Feature Toggles (User Request)
-    let mut show_mesh = true; // Default
-    let mut show_pose = true; // Default
-    let mut show_gaze = false;
-    let mut mirror_mode = true; // Default ON per user request
+    // Feature Toggles (Loaded from Config)
+    let mut show_mesh = config.defaults.show_mesh;
+    let mut show_pose = config.defaults.show_pose;
+    let mut show_gaze = config.defaults.show_gaze;
+    let mut mirror_mode = config.defaults.mirror_mode;
+    let mut show_overlay = config.defaults.show_overlay;
     
     // We keep one robust pipeline active
     let mut pipeline = create_pipeline("pupil_gaze"); // This pipeline computes everything
@@ -348,7 +354,7 @@ fn main() -> anyhow::Result<()> {
             
             // Adjust start position for larger text
             let mut y_start = height as usize / 2 - 150;
-            let menu_scale = 2;
+            let menu_scale = config.ui.menu_scale;
             let line_height = 12 * menu_scale;
             
             // Draw Toggles
