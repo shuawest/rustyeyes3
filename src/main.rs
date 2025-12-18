@@ -26,14 +26,16 @@ use calibration::CalibrationManager;
 use config::AppConfig;
 use ttf::FontRenderer;
 
-fn create_pipeline(name: &str) -> Box<dyn Pipeline> {
+fn create_pipeline(name: &str, config: &AppConfig) -> Box<dyn Pipeline> {
     match name {
-        "detection" => Box::new(inference::FaceDetectionPipeline::new("face_detection.onnx").unwrap()),
-        "pose" => Box::new(head_pose::HeadPosePipeline::new("head_pose.onnx", "face_detection.onnx").expect("Failed to load Pose")),
-        "head_gaze" => Box::new(gaze::SimulatedGazePipeline::new("face_mesh.onnx", "head_pose.onnx", "face_detection.onnx").expect("Failed to load Head Gaze")),
-        "pupil_gaze" => Box::new(gaze::PupilGazePipeline::new("face_mesh.onnx", "head_pose.onnx", "face_detection.onnx").expect("Failed to load Pupil Gaze")),
-        "gaze" => Box::new(gaze::SimulatedGazePipeline::new("face_mesh.onnx", "head_pose.onnx", "face_detection.onnx").expect("Failed to load Gaze")), // Default alias
-        _ => Box::new(inference::FaceMeshPipeline::new("face_mesh.onnx", "face_detection.onnx").expect("Failed to load mesh")),
+        "detection" => Box::new(inference::FaceDetectionPipeline::new("models/face_detection.onnx").unwrap()),
+        "pose" => Box::new(head_pose::HeadPosePipeline::new("models/head_pose.onnx", "models/face_detection.onnx").expect("Failed to load Pose")),
+        "head_gaze" => Box::new(gaze::SimulatedGazePipeline::new("models/face_mesh.onnx", "models/head_pose.onnx", "models/face_detection.onnx").expect("Failed to load Head Gaze")),
+        "pupil_gaze" => Box::new(gaze::PupilGazePipeline::new("models/face_mesh.onnx", "models/head_pose.onnx", "models/face_detection.onnx").expect("Failed to load Pupil Gaze")),
+        "l2cs" => Box::new(gaze::L2CSPipeline::new(&config.models.l2cs_path, "models/face_mesh.onnx", "models/face_detection.onnx").expect("Failed to load L2CS")),
+        "mobile" => Box::new(gaze::MobileGazePipeline::new(&config.models.mobile_path, "models/face_mesh.onnx", "models/face_detection.onnx").expect("Failed to load MobileGaze")),
+        "gaze" => Box::new(gaze::SimulatedGazePipeline::new("models/face_mesh.onnx", "models/head_pose.onnx", "models/face_detection.onnx").expect("Failed to load Gaze")), // Default alias
+        _ => Box::new(inference::FaceMeshPipeline::new("models/face_mesh.onnx", "models/face_detection.onnx").expect("Failed to load mesh")),
     }
 }
 
@@ -60,8 +62,17 @@ fn main() -> anyhow::Result<()> {
     println!("Opened camera: {}", camera.name());
 
     // 2. Setup Inference
-    let current_pipeline = create_pipeline(&args.model.unwrap_or_else(|| "pupil_gaze".to_string()));
-    println!("Active Pipeline: {}", current_pipeline.name());
+    let mut active_model_index = 0;
+    let available_models = ["pupil_gaze", "l2cs", "mobile", "head_gaze"];
+    // Override if arg is provided
+    if let Some(arg_model) = &args.model {
+        if let Some(idx) = available_models.iter().position(|&m| m == arg_model) {
+            active_model_index = idx;
+        }
+    }
+    
+    let mut pipeline = create_pipeline(available_models[active_model_index], &config);
+    println!("Active Pipeline: {}", pipeline.name());
 
     // 3. Setup Output
     // We get the actual format from the camera
@@ -75,7 +86,7 @@ fn main() -> anyhow::Result<()> {
     let mut calibration_mode = false;
 
     println!("Starting Pipeline...");
-    println!("Controls: [1] Mesh [2] Pose [3] Gaze [5] Mirror [6] Overlay [7] Moondream [9] Calibration [Space] Capture");
+    println!("Controls: [1] Mesh [2] Pose [3] Gaze [4] Model [5] Mirror [6] Overlay [7] Moondream [9] Calibration [Space] Capture");
 
     // State for Overlay
     // let mut show_overlay = true; // Moved to config above
@@ -177,7 +188,7 @@ fn main() -> anyhow::Result<()> {
     let mut moondream_pending = false;
 
     // We keep one robust pipeline active
-    let mut pipeline = create_pipeline("pupil_gaze"); 
+    // pipeline is already initialized above
     
     // Initialize Font Renderer (Try to load custom, else None -> Fallback to bitmap)
     let font_renderer = FontRenderer::try_load(&config.ui.font_family);
@@ -227,12 +238,12 @@ fn main() -> anyhow::Result<()> {
         last_pipeline_output = output.clone();
 
         // --- MOONDREAM DISPATCH ---
+        let mut calculated_screen_coords: Option<(f32, f32)> = None;
         if moondream_active {
              // Clone frame? This might be heavy. dynamic_image from cam_frame?
              // cam_frame is RgbBuffer.
              let img = image::DynamicImage::ImageRgb8(latest_realtime_frame.clone());
                          // Unified Coordinate Calculation (Guarantees Blue/Green synchronization)
-             let mut calculated_screen_coords: Option<(f32, f32)> = None;
              if let Some(out) = &output {
                   if let PipelineOutput::Gaze { yaw, pitch, .. } = out {
                         let eff_yaw = if mirror_mode { -(*yaw) } else { *yaw };
@@ -294,6 +305,11 @@ fn main() -> anyhow::Result<()> {
                 minifb::Key::Key1 => show_mesh = !show_mesh,
                 minifb::Key::Key2 => show_pose = !show_pose,
                 minifb::Key::Key3 => show_gaze = !show_gaze,
+                minifb::Key::Key4 => {
+                    active_model_index = (active_model_index + 1) % available_models.len();
+                    pipeline = create_pipeline(available_models[active_model_index], &config);
+                    println!("Switched Pipeline to: {}", pipeline.name());
+                },
                 
                 minifb::Key::Key5 => mirror_mode = !mirror_mode,
 
@@ -557,6 +573,7 @@ fn main() -> anyhow::Result<()> {
                 ("1", "Face Mesh", show_mesh),
                 ("2", "Head Pose", show_pose),
                 ("3", "Eye Gaze", show_gaze),
+                ("4", "Cycle Model", true),
                 ("5", "Mirror", mirror_mode),
                 ("6", "Overlay", show_overlay),
                 ("7", "Moondream", moondream_active),
@@ -586,6 +603,9 @@ fn main() -> anyhow::Result<()> {
                  if let Some((lx, ly, _ts)) = last_calibration_point {
                      menu_str.push_str(&format!("LAST CAL: {:.0}, {:.0}|", lx, ly));
                  }
+                 
+                 // 3. Active Model
+                 menu_str.push_str(&format!("MODEL: {}|", pipeline.name()));
                  
                  // Send to Overlay
                  if let Some(win) = overlay_window.as_mut() {

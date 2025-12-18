@@ -14,5 +14,9 @@
     "font_family": "Monospace",
     "mesh_dot_size": 2,
     "mesh_color_hex": "#FF0000"
+  },
+  "models": {
+    "l2cs_path": "models/l2cs_net.onnx",
+    "mobile_path": "models/mobile_gaze.onnx"
   }
 }

@@ -8,6 +8,7 @@ use anyhow::Result;
 pub struct AppConfig {
     pub defaults: Defaults,
     pub ui: UiConfig,
+    pub models: Models,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -59,11 +60,28 @@ impl Default for UiConfig {
     }
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Models {
+    pub l2cs_path: String,
+    pub mobile_path: String,
+}
+
+impl Default for Models {
+    fn default() -> Self {
+        Self {
+            l2cs_path: "models/l2cs_net.onnx".to_string(),
+            mobile_path: "models/mobile_gaze.onnx".to_string(),
+        }
+    }
+}
+
 impl Default for AppConfig {
     fn default() -> Self {
         Self {
             defaults: Defaults::default(),
             ui: UiConfig::default(),
+            models: Models::default(),
         }
     }
 }

@@ -52,6 +52,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - _Change_: Created detailed CHANGELOG.md and updated AGENTS.md.
   - _Intent_: Establish a source of truth for project history to aid future AI agents in understanding the "why" behind architectural decisions.
   - _Approach_: Analyzed `git log` history, categorized commits by semantic impact, and wrote this file. Updated `AGENTS.md` to reference this file as the primary historical record.
+  - _Approach_: Analyzed `git log` history, categorized commits by semantic impact, and wrote this file. Updated `AGENTS.md` to reference this file as the primary historical record.
+
+## [0.3.0] - 2025-12-17 (CNN Gaze Models)
+
+### Added
+
+- **L2CS-Net & MobileGaze Integration**:
+  - _Change_: Added fully compliant `Pipeline` implementations for L2CS-Net (ResNet50) and MobileGaze (MobileNetV2) ONNX models.
+  - _Intent_: Provide robust, ML-based gaze estimation alternatives to the geometric pupil tracker.
+- **Model Switching UI**:
+  - _Change_: Added `Key4` toggle to cycle between `Pupil`, `L2CS`, `Mobile`, and `HeadPose` pipelines at runtime.
+  - _Intent_: Allow rapid comparison of different model behaviors.
+- **Model Downloader**:
+  - _Change_: Created `scripts/setup_models.sh` to automatically fetch required `.onnx` assets.
+  - _Intent_: simplify setup. Replaces `get_model.sh`.
+
+### Changed
+
+- **Gaze Output Units**:
+  - _Change_: Standardized all pipelines to output **Degrees** (Yaw/Pitch) to match the rendering logic in `main.rs`.
+- **Gaze Smoothing**:
+  - _Change_: Integrated Exponential Moving Average (EMA) smoothing for L2CS and MobileGaze to reduce jitter.
+- **Sensitivity Gain**:
+  - _Change_: Applied a tunable gain factor (5.0x) to L2CS/MobileGaze outputs to map small eye movements to full-screen cursor control.
+- **Vertical Calibration**:
+  - _Change_: Applied a -12.0 degree pitch offset to compensate for typical webcam placement (top of screen looking down).
 
 ## [0.2.2] - 2025-12-17 (Performance & Sync)
 
