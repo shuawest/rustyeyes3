@@ -235,17 +235,20 @@ fn main() -> anyhow::Result<()> {
              // Extract current Gaze for comparison (Now fully synchronized)
               let current_gaze_coords = if let Some(out) = &output {
                    if let PipelineOutput::Gaze { yaw, pitch, .. } = out {
-                        let eff_yaw = if mirror_mode { -yaw } else { *yaw };
+                        let eff_yaw = if mirror_mode { -(*yaw) } else { *yaw };
                         // Precise calculation matching drawing logic
                         let mut sx = width as f32 / 2.0; 
                         let mut sy = height as f32 / 2.0;
                         sx += eff_yaw * 20.0;
-                        sy -= pitch * 20.0;
+                        sy -= pitch * 20.0; // pitch is f32
                         
                         // Clamp to prevent visual glitches (e.g. 9000+ y-coord)
                         // Allow some off-screen drift but prevent crazy values
                         sx = sx.clamp(-2000.0, 3500.0);
                         sy = sy.clamp(-2000.0, 3500.0);
+                        
+                        // DEBUG LOGGING
+                        println!("[DEBUG] Moondream Dispatch: Mirror={} Yaw={:.2} EffYaw={:.2} SX={:.2}", mirror_mode, yaw, eff_yaw, sx);
                         
                         Some((sx, sy))
                    } else { None }
@@ -455,6 +458,11 @@ fn main() -> anyhow::Result<()> {
                             screen_x += yaw * x_factor;
                             screen_y -= pitch * y_factor;
                             
+                            // DEBUG LOGGING
+                            if moondream_active {
+                               println!("[DEBUG] Drawing Loop: Mirror={} Yaw={:.2} SX={:.2}", mirror_mode, yaw, screen_x);
+                            }
+                            
                             if let Some(win) = overlay_window.as_mut() {
                                 let _ = win.update_gaze(screen_x, screen_y);
                                 
@@ -633,11 +641,14 @@ fn main() -> anyhow::Result<()> {
                      // Format: [1] FACE MESH: ON
                      menu_str.push_str(&format!("[{}] {}: {}|", key, label.to_uppercase(), status));
                  }
-                 
-                 // Moondream Status
-                 if moondream_active && moondream_pending {
-                     menu_str.push_str("MOON: WATCHING...|");
-                 }
+                                  // Moondream Status
+                  if moondream_active {
+                       if moondream_pending {
+                           menu_str.push_str("MOON: PROCESSING...|");
+                       } else {
+                           menu_str.push_str("MOON: READY|");
+                       }
+                  }
                  
                  // 2. Last Calibration Point
                  if let Some((lx, ly, _ts)) = last_calibration_point {
