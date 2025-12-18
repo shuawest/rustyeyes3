@@ -1,0 +1,105 @@
+Real-Time Eye Gaze and Pupil Tracking Models
+
+This report consolidates all findings from this conversation on face detection, eye gaze estimation, and pupil or iris tracking models suitable for real-time processing. The focus is low latency, Rust integration, and deployment on Apple Silicon (M3 and M4) and edge GPUs such as NVIDIA Jetson Nano. The descriptions intentionally preserve the richer, explanatory style from the initial analysis while consolidating everything into a single durable reference.
+
+Face Detection Models (Real-Time Capable)
+
+BlazeFace (MediaPipe) is an ultra-lightweight face detector designed specifically for mobile and edge devices. It uses a small CNN inspired by MobileNet and is optimized for frontal faces. The core strength of BlazeFace is latency. It is often sub-millisecond per frame on modern hardware and can run comfortably on CPUs. The tradeoff is reduced robustness for extreme head poses, very small faces, or heavy occlusion. It is ideal when face detection is only a precursor to downstream eye or gaze models and absolute detection accuracy is not the top priority.
+
+CenterFace is an anchor-free, one-stage detector that treats faces as keypoints. It directly predicts face bounding boxes and five facial landmarks including both eyes. It was designed explicitly to run in real time on low-power hardware and has demonstrated real-time performance on a single CPU core. This makes CenterFace particularly attractive for Rust pipelines where simplicity, determinism, and low overhead matter. The inclusion of eye landmarks is a major advantage because it reduces the need for a separate landmark model.
+
+RetinaFace is an accuracy-first detector originating from the InsightFace ecosystem. It excels in challenging conditions such as side profiles, occlusion, masks, and very small faces. RetinaFace also outputs five facial landmarks. The cost of this accuracy is compute. Larger RetinaFace variants are heavy and require GPU acceleration for real-time performance. On Apple Silicon, RetinaFace can run well via Core ML or ONNX Runtime with the CoreML Execution Provider. On Jetson Nano, it is generally too heavy unless aggressively optimized or replaced with a smaller variant.
+
+SCRFD is a newer InsightFace detector designed to preserve RetinaFace-level accuracy while dramatically reducing computation and latency. It is anchor-free and comes in multiple sizes, allowing you to tune accuracy versus speed. SCRFD often represents the best balance for edge devices and is generally preferred over RetinaFace when real-time constraints are tight. It is well suited for both Apple Silicon and Jetson Nano when paired with GPU acceleration.
+
+YuNet is a compact face detector included in the OpenCV model zoo. It is designed for CPU-bound real-time use and is often run at lower resolutions to maximize speed. YuNet is less accurate than RetinaFace or SCRFD but significantly faster on CPUs. It is a practical choice for simple webcam scenarios or when GPU access is limited.
+
+Eye Gaze Estimation Models
+
+Intel’s gaze-estimation-adas-0002 model is a production-oriented gaze direction model from the OpenVINO model zoo. It takes cropped left and right eye images along with head pose angles as input and outputs a 3D gaze vector. The model is small, fast, and designed to be part of a modular pipeline. Its performance is excellent for real-time applications, even on CPUs. The requirement to supply head pose means you must run a head pose model and facial landmark detection upstream, but the resulting system is stable and predictable.
+
+L2CS-Net is a more accuracy-focused gaze estimation model. It predicts gaze yaw and pitch directly from a face image using a ResNet backbone and a hybrid classification and regression approach. L2CS-Net performs very well in unconstrained environments and is widely used in academic and applied research. It is heavier than Intel’s model and generally requires GPU acceleration for real-time use. On Apple Silicon, it can run efficiently via Metal or Core ML. It is an excellent candidate for fine-tuning on custom data using a DGX-class system.
+
+MobileGaze-style models are lighter variants inspired by L2CS-Net that use MobileNet or similar backbones. They trade some accuracy for significantly lower latency and are more suitable for embedded and edge deployments. These models are useful when you need gaze direction but cannot afford the compute cost of a full ResNet-based architecture.
+
+Pupil and Iris Tracking Models
+
+MediaPipe Iris is one of the most practical and widely deployed real-time iris and pupil tracking models available. It outputs detailed eye landmarks and explicit iris landmarks, including pupil center and iris radius. The model is small, fast, and stable, and is designed to run in real time on mobile devices using a single RGB camera. MediaPipe Iris is especially valuable because it provides direct geometric information rather than abstract gaze vectors. With calibration, it can yield highly accurate gaze estimation.
+
+MediaPipe Face Mesh combined with the Iris model provides full face context plus precise eye geometry. Face Mesh provides dense facial landmarks, while the Iris model refines the eye region. This combination is commonly used in augmented reality, eye tracking, and attention analysis systems. It is computationally efficient and well supported across platforms.
+
+The open-closed-eye-0001 model from Intel is a simple binary classifier that determines whether an eye is open or closed. It is extremely lightweight and useful for blink detection, drowsiness detection, or gating gaze estimation when eyes are closed. While not a gaze model, it is often a critical component of robust real-time eye tracking systems.
+
+Gaze Target and Attention Models
+
+Gaze-LLE is a more recent and ambitious approach that predicts where in a scene a person is looking by producing a gaze target heatmap. It uses a Vision Transformer backbone such as DINOv2 and incorporates head location via a prompting mechanism. Gaze-LLE achieves state-of-the-art performance on gaze target benchmarks but is significantly heavier than angle-based gaze models. It is best suited for research, high-end GPUs, or offline analysis rather than strict low-latency edge deployment.
+
+NITEC is an eye contact detection model that classifies whether a person is looking directly at the camera. Rather than estimating continuous gaze angles, it solves the specific problem of eye contact, which is often more robust for human interaction scenarios. NITEC has been shown to outperform angle-threshold-based approaches for eye contact detection and runs efficiently as a binary classifier.
+
+Runtime and Rust Integration
+
+ONNX Runtime is the most practical inference engine for Rust today. The ort crate provides safe Rust bindings and supports multiple execution providers, including CPU and CoreML on macOS. On Apple Silicon, the CoreML Execution Provider allows models to run on the Neural Engine and GPU. On Jetson Nano, ONNX Runtime can run on CPU or CUDA, with TensorRT used for further optimization if needed.
+
+For Apple-native execution, models can be converted to Core ML and run directly from Rust using bindings such as coreml-rs or objc2-core-ml. This approach can provide excellent performance and lower latency on M3 and M4 systems, at the cost of a more Apple-specific toolchain.
+
+MediaPipe can be integrated into Rust via community projects such as mediapipe-rs or ux-mediapipe, often using WasmEdge or C++ bindings under the hood. While not as turnkey as ONNX Runtime, MediaPipe remains one of the best end-to-end solutions for real-time eye and face tracking.
+
+Practical Reference Pipelines
+
+A lowest-latency pipeline typically uses a lightweight face detector such as BlazeFace or CenterFace, followed by MediaPipe Iris for pupil tracking, optionally augmented with head pose and calibration logic.
+
+A balanced pipeline often combines SCRFD for face detection, Intel’s gaze-estimation-adas-0002 for gaze direction, and MediaPipe Iris for fine eye geometry.
+
+An accuracy-first pipeline uses RetinaFace for detection and L2CS-Net or Gaze-LLE for gaze estimation, requiring GPU acceleration and accepting higher latency.
+
+Key Takeaways
+
+RetinaFace can be used successfully from a Rust harness on Apple Silicon via ONNX Runtime or Core ML. MediaPipe Iris is the most practical pupil tracking solution for real-time systems. Gaze angle models are simpler and faster than gaze target models. In many systems, iris landmarks plus calibration outperform end-to-end gaze regressors. All models discussed here can be orchestrated from Rust with careful runtime selection.
+
+Sources
+
+BlazeFace: https://research.google/blog/blazeface-sub-millisecond-neural-face-detection/
+
+CenterFace: https://arxiv.org/abs/1911.03599
+
+InsightFace and RetinaFace: https://github.com/deepinsight/insightface
+
+SCRFD: https://github.com/deepinsight/insightface/tree/master/detection/scrfd
+
+YuNet: https://github.com/opencv/opencv_zoo/tree/main/models/face_detection_yunet
+
+Intel gaze-estimation-adas-0002: https://docs.openvino.ai/2023.3/omz_models_model_gaze_estimation_adas_0002.html
+
+OpenVINO gaze demo: https://docs.openvino.ai/2023.3/omz_demos_gaze_estimation_demo_cpp.html
+
+L2CS-Net: https://github.com/Ahmednull/L2CS-Net
+
+MobileGaze: https://yakhyo.github.io/gaze-estimation/
+
+MediaPipe Iris: https://research.google/blog/mediapipe-iris-real-time-iris-tracking-depth-estimation/
+
+MediaPipe Iris implementation notes: https://github.com/patlevin/face-detection-tflite/blob/main/fdlite/iris_landmark.py
+
+MediaPipe Face Mesh: https://developers.google.com/mediapipe/solutions/vision/face_mesh
+
+Open closed eye model: https://docs.openvino.ai/latest/omz_models_model_open_closed_eye_0001.html
+
+Gaze-LLE: https://arxiv.org/abs/2412.09586
+
+NITEC eye contact detection: https://arxiv.org/abs/2311.15862
+
+ONNX Runtime CoreML EP: https://onnxruntime.ai/docs/execution-providers/CoreML-ExecutionProvider.html
+
+Rust ort crate: https://crates.io/crates/ort
+
+coreml-rs: https://crates.io/crates/coreml-rs
+
+objc2-core-ml: https://crates.io/crates/objc2-core-ml
+
+mediapipe-rs: https://github.com/WasmEdge/mediapipe-rs
+
+ux-mediapipe: https://crates.io/crates/ux-mediapipe
+
+MediaPipe on Jetson discussion: https://forums.developer.nvidia.com/t/google-mediapipe-real-time-hand-tracking-on-nano/80281
+
+MediaPipe Jetson fork: https://github.com/anion0278/mediapipe-jetson

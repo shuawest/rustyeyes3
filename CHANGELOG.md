@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Unreleased - Refactor Research Directory**:
+  - _Change_: Moved contents of `model_training` to `research/` directory.
+  - _Intent_: Organize exploratory work and training scripts into a dedicated research folder.
 - **Unreleased - Fix Calibration Toggle**:
   - _Change_: Implemented the logic for `Key9` to toggle `calibration_mode` boolean and added it to the HUD Menu.
   - _Intent_: The handler was previously empty, preventing the user from entering calibration mode.
