@@ -45,6 +45,8 @@ def main():
             line = line.strip()
             if not line:
                 continue
+            
+            log_debug(f"FULL REQUEST: {line}")
                 
             request = json.loads(line)
             
@@ -143,8 +145,9 @@ def main():
             }
             
             # Write result to stdout
-            print(json.dumps(result), flush=True)
-            log_debug(f"Processed request: {response[:50]}...")
+            response_json = json.dumps(result)
+            print(response_json, flush=True)
+            log_debug(f"FULL RESPONSE: {response_json}")
             
         except Exception as e:
             error_result = {

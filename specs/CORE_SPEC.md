@@ -71,10 +71,17 @@ The system shall support runtime-switchable pipelines:
   - `ESC`: Quit application.
 - **Visuals**:
   - **Red**: Face Mesh (Configurable).
-  - **Blue Ray**: Real-time Gaze.
-  - **Cyan Dot**: Moondream Prediction.
-  - **Green Dot (Red Center)**: Gaze at Capture Start.
-  - **Green Dot (Yellow Center)**: Gaze stored from Capture (Result comparison).
+  - **Blue Dot**: Real-time ONNX Gaze (Current Frame).
+- **Green Dot (Red Center)**: _PENDING_ Capture. Represents the ONNX gaze position at the exact moment the frame was sent to Moondream.
+- **Green Dot (Yellow Center)**: _COMPLETED_ Capture. Represents the same ONNX gaze position, updated to "Approved" state when Moondream returns.
+- **Cyan Dot (Yellow Center)**: _RESULT_. The gaze position returned by Moondream.
+- **Visual Logic**:
+  - When **[7]** is active:
+    - Every ~30 frames, a capture occurs.
+    - **IMMEDIATELY**: A Green/Red dot appears at the current Blue dot location.
+    - **LATENCY**: Processing...
+    - **RESULT**: The Green/Red dot turns Green/Yellow. A Cyan/Yellow dot appears nearby.
+    - **REGRESSION PROTECTION**: The Green dot MUST correspond to where the Blue dot _was_ at the start of the cycle.
 
 ## 2. Technical Requirements
 

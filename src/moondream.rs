@@ -70,6 +70,10 @@ impl MoondreamOracle {
         };
         
         let request_json = serde_json::to_string(&request)?;
+        
+        // Debug Log
+        println!("[MOONDREAM] SENDING REQUEST: {}", request_json);
+
         writeln!(self.stdin, "{}", request_json)
             .context("Failed to write to Python server stdin")?;
         self.stdin.flush()?;
