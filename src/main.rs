@@ -87,7 +87,9 @@ fn main() -> anyhow::Result<()> {
     // let mut moondream_oracle: Option<moondream::MoondreamOracle> = None; // Now in worker thread
     let _paused_frame: Option<image::ImageBuffer<image::Rgb<u8>, Vec<u8>>> = None; // Still used?
     let mut moondream_result: Option<types::Point3D> = None;
-    let mut captured_gaze_result: Option<(f32, f32)> = None; // For "Green Dot" comparison
+    let mut moondream_result: Option<types::Point3D> = None;
+    let mut captured_gaze_verified: Option<(f32, f32)> = None; // "Green Dot" (Yellow Center) - Last Completed
+    let mut captured_gaze_pending: Option<(f32, f32)> = None; // "Green Dot" (Red Center) - Currently Processing
     let mut moondream_active = false;
     
     // Smoothing State
@@ -239,6 +241,12 @@ fn main() -> anyhow::Result<()> {
                         let mut sy = height as f32 / 2.0;
                         sx += eff_yaw * 20.0;
                         sy -= pitch * 20.0;
+                        
+                        // Clamp to prevent visual glitches (e.g. 9000+ y-coord)
+                        // Allow some off-screen drift but prevent crazy values
+                        sx = sx.clamp(-2000.0, 3500.0);
+                        sy = sy.clamp(-2000.0, 3500.0);
+                        
                         Some((sx, sy))
                    } else { None }
              } else { None };
@@ -253,7 +261,7 @@ fn main() -> anyhow::Result<()> {
                       // SUCCESS: We sent a frame to Moondream.
                       // Update state to PENDING and show immediate capture dot.
                       moondream_pending = true;
-                      captured_gaze_result = Some(coords);
+                      captured_gaze_pending = Some(coords);
                  }
              }
         }
@@ -263,7 +271,12 @@ fn main() -> anyhow::Result<()> {
         while let Ok((pt, onnx_data, _cal_id)) = rx_result.try_recv() {
              moondream_result = Some(pt);
              if let Some(capt) = onnx_data {
-                 captured_gaze_result = Some(capt);
+                 println!("[MOONDREAM] Received Result. Captured ONNX Gaze: ({:.2}, {:.2})", capt.0, capt.1);
+                 // TRANSITION: Pending -> Verified
+                 captured_gaze_verified = Some(capt);
+                 captured_gaze_pending = None; // Clear pending (it moved to verified)
+             } else {
+                 println!("[MOONDREAM] Received Result but ONNX Data is Missing!");
              }
              moondream_pending = false; // Result received!
         }
@@ -287,11 +300,13 @@ fn main() -> anyhow::Result<()> {
                     if moondream_active {
                         moondream_active = false;
                         moondream_result = None;
-                        captured_gaze_result = None; // clear green dot
+                        captured_gaze_verified = None;
+                        captured_gaze_pending = None;
                         moondream_pending = false;
                     } else {
                         moondream_active = true;
-                        captured_gaze_result = None; // start fresh
+                        captured_gaze_verified = None; // start fresh
+                        captured_gaze_pending = None;
                         moondream_result = None;
                     }
                 },
@@ -443,15 +458,17 @@ fn main() -> anyhow::Result<()> {
                             if let Some(win) = overlay_window.as_mut() {
                                 let _ = win.update_gaze(screen_x, screen_y);
                                 
-                                // Send Captured Gaze if available
-                                if let Some((cx, cy)) = captured_gaze_result {
-                                    // State: 0 (Pending/Red) if moondream_pending
-                                    // State: 1 (Done/Yellow) if !moondream_pending
-                                    let state = if moondream_pending { 0 } else { 1 };
-                                    let _ = win.update_captured_onnx_with_state(cx, cy, state);
+                                // Send Verified Gaze (Green/Yellow)
+                                if let Some((cx, cy)) = captured_gaze_verified {
+                                    let _ = win.update_captured_onnx_verified(cx, cy);
                                 }
                                 
-                                // Send Moondream Result if available (Fix for blank overlay)
+                                // Send Pending Gaze (Green/Red)
+                                if let Some((px, py)) = captured_gaze_pending {
+                                    let _ = win.update_captured_onnx_pending(px, py);
+                                }
+                                
+                                // Send Moondream Result if available (Cyan/Yellow)
                                 if let Some(pt) = moondream_result {
                                      // Moondream is normalized 0..1. Map to screen.
                                      let mx = pt.x * width as f32;
@@ -523,12 +540,14 @@ fn main() -> anyhow::Result<()> {
             // }
             
             // --- CAPTURED GAZE (Green Dot) ---
+            // --- CAPTURED GAZE (Buffer Drawing) ---
             if moondream_active {
-               if let Some((cx, cy)) = captured_gaze_result {
+               // 1. Verified (Green + Yellow)
+               if let Some((cx, cy)) = captured_gaze_verified {
                    let mx = cx as i32;
                    let my = cy as i32;
                    let radius = 10;
-                   let color = (0, 255, 0); // Green
+                   let center_radius = 2;
                    
                    for dy in -radius..=radius {
                        for dx in -radius..=radius {
@@ -538,9 +557,52 @@ fn main() -> anyhow::Result<()> {
                                if px >= 0 && px < width as i32 && py >= 0 && py < height as i32 {
                                    let idx = (py as usize * width as usize + px as usize) * 3;
                                    if idx + 2 < display_buffer.len() {
-                                       display_buffer[idx] = color.0;
-                                       display_buffer[idx+1] = color.1;
-                                       display_buffer[idx+2] = color.2;
+                                       // Center Dot?
+                                       if dx*dx + dy*dy <= center_radius*center_radius {
+                                           // Yellow (255, 255, 0)
+                                           display_buffer[idx] = 255;
+                                           display_buffer[idx+1] = 255;
+                                           display_buffer[idx+2] = 0;
+                                       } else {
+                                           // Green (0, 255, 0)
+                                           display_buffer[idx] = 0;
+                                           display_buffer[idx+1] = 255;
+                                           display_buffer[idx+2] = 0;
+                                       }
+                                   }
+                               }
+                           }
+                       }
+                   }
+               }
+               
+               // 2. Pending (Green + Red)
+               if let Some((px, py)) = captured_gaze_pending {
+                   let mx = px as i32;
+                   let my = py as i32;
+                   let radius = 10;
+                   let center_radius = 2;
+                   
+                   for dy in -radius..=radius {
+                       for dx in -radius..=radius {
+                           if dx*dx + dy*dy <= radius*radius {
+                               let px = mx + dx;
+                               let py = my + dy;
+                               if px >= 0 && px < width as i32 && py >= 0 && py < height as i32 {
+                                   let idx = (py as usize * width as usize + px as usize) * 3;
+                                   if idx + 2 < display_buffer.len() {
+                                       // Center Dot?
+                                       if dx*dx + dy*dy <= center_radius*center_radius {
+                                           // Red (255, 0, 0)
+                                           display_buffer[idx] = 255;
+                                           display_buffer[idx+1] = 0;
+                                           display_buffer[idx+2] = 0;
+                                       } else {
+                                           // Green (0, 255, 0)
+                                           display_buffer[idx] = 0;
+                                           display_buffer[idx+1] = 255;
+                                           display_buffer[idx+2] = 0;
+                                       }
                                    }
                                }
                            }

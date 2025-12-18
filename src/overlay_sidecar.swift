@@ -5,7 +5,8 @@ import Foundation
 var cursorPoint: NSPoint = NSPoint(x: 0, y: 0)
 var moondreamPoint: NSPoint? = nil
 var capturedPoint: NSPoint? = nil
-var capturedState: Int = -1 // 0=Pending(Red), 1=Done(Yellow), -1=Default(White)
+var pendingPoint: NSPoint? = nil
+var capturedState: Int = -1 // Deprecated but kept for safety
 var showOverlay: Bool = true
 var customFontName: String = "Monospace"
 var customFontSize: CGFloat = 14.0
@@ -56,11 +57,12 @@ class OverlayView: NSView {
         NSBezierPath(ovalIn: sRect).fill()
         
         // 3. Captured ONNX Gaze (Green/White) - "Where ONNX thought we looked at frame time"
+        // 3. Captured ONNX Gaze (Green/Yellow) - "Where ONNX verified"
         if let cap = capturedPoint {
             let capY = screenH - cap.y
             let capX = cap.x
             
-            let cRadius: CGFloat = 40.0
+            let cRadius: CGFloat = 50.0 // Match Blue Dot
             let cRect = NSRect(x: capX - cRadius, y: capY - cRadius, width: cRadius * 2, height: cRadius * 2)
             NSColor(red: 0.0, green: 1.0, blue: 0.0, alpha: 0.5).setFill() // Green
             NSBezierPath(ovalIn: cRect).fill()
@@ -68,24 +70,34 @@ class OverlayView: NSView {
             let csRadius: CGFloat = 5.0
             let csRect = NSRect(x: capX - csRadius, y: capY - csRadius, width: csRadius * 2, height: csRadius * 2)
             
-            // Color based on State
-            if capturedState == 0 {
-                NSColor.red.setFill() // Pending
-            } else if capturedState == 1 {
-                NSColor.yellow.setFill() // Done
-            } else {
-                NSColor.white.setFill() // Default
-            }
+            NSColor.yellow.setFill() // Always Yellow (Verified)
             NSBezierPath(ovalIn: csRect).fill()
         }
+        
+        // 3b. Pending ONNX Gaze (Green/Red) - "What we are checking"
+        if let pend = pendingPoint {
+            let pendY = screenH - pend.y
+            let pendX = pend.x
+            
+            let pRadius: CGFloat = 50.0 // Match Blue Dot
+            let pRect = NSRect(x: pendX - pRadius, y: pendY - pRadius, width: pRadius * 2, height: pRadius * 2)
+            NSColor(red: 0.0, green: 1.0, blue: 0.0, alpha: 0.5).setFill() // Green
+            NSBezierPath(ovalIn: pRect).fill()
+            
+            let psRadius: CGFloat = 5.0
+            let psRect = NSRect(x: pendX - psRadius, y: pendY - psRadius, width: psRadius * 2, height: psRadius * 2)
+            
+            NSColor.red.setFill() // Always Red (Pending)
+            NSBezierPath(ovalIn: psRect).fill()
+        }
 
-        // 4. Moondream Gaze (Cyan/Gold)
+        // 4. Moondream Gaze (Cyan/Yellow)
         if let md = moondreamPoint {
             let mdY = screenH - md.y
             let mdX = md.x
             
             // Large Circle (Cyan, Alpha 0.6)
-            let mRadius: CGFloat = 40.0
+            let mRadius: CGFloat = 50.0 // Match Blue Dot
             let mRect = NSRect(x: mdX - mRadius, y: mdY - mRadius, width: mRadius * 2, height: mRadius * 2)
             NSColor(red: 0.0, green: 1.0, blue: 1.0, alpha: 0.6).setFill() // Cyan
             NSBezierPath(ovalIn: mRect).fill()
@@ -168,7 +180,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             while let line = readLine(strippingNewline: true) {
                 let parts = line.split(separator: " ")
                 
-                // Protocol: "G x y" or "M x y"
+                // Protocol: "G x y", "M x y", "C x y", "P x y"
                 // Legacy support "x y" -> G
                 if parts.count >= 2 {
                     if parts[0] == "G" && parts.count >= 3 {
@@ -186,11 +198,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                              }
                          }
                     } else if parts[0] == "C" && parts.count >= 3 {
+                         // Verified/Completed Capture (Green + Yellow)
                          if let x = Double(parts[1]), let y = Double(parts[2]) {
-                             let state = (parts.count >= 4) ? (Int(parts[3]) ?? -1) : -1
                              DispatchQueue.main.async {
                                  capturedPoint = NSPoint(x: x, y: y)
-                                 capturedState = state
+                                 view.needsDisplay = true
+                             }
+                         }
+                    } else if parts[0] == "P" && parts.count >= 3 {
+                         // Pending Capture (Green + Red)
+                         if let x = Double(parts[1]), let y = Double(parts[2]) {
+                             DispatchQueue.main.async {
+                                 pendingPoint = NSPoint(x: x, y: y)
                                  view.needsDisplay = true
                              }
                          }

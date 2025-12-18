@@ -38,9 +38,18 @@ impl OverlayWindow {
         Ok(())
     }
 
-    pub fn update_captured_onnx_with_state(&mut self, x: f32, y: f32, state: i32) -> Result<()> {
+    pub fn update_captured_onnx_verified(&mut self, x: f32, y: f32) -> Result<()> {
         if let Some(stdin) = self.process.stdin.as_mut() {
-            writeln!(stdin, "C {} {} {}", x, y, state)?;
+            // C = Completed/Verified
+            writeln!(stdin, "C {} {}", x, y)?;
+        }
+        Ok(())
+    }
+
+    pub fn update_captured_onnx_pending(&mut self, x: f32, y: f32) -> Result<()> {
+        if let Some(stdin) = self.process.stdin.as_mut() {
+            // P = Pending
+            writeln!(stdin, "P {} {}", x, y)?;
         }
         Ok(())
     }
