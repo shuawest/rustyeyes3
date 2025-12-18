@@ -14,3 +14,4 @@ pub mod font;
 pub mod config;
 pub mod ttf;
 pub mod rectification;
+pub mod gaze_tests;

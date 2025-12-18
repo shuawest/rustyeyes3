@@ -488,7 +488,10 @@ fn main() -> anyhow::Result<()> {
                                 // Fallback (should match logic above if valid)
                                 // Only happens if output was None or pattern match failed
                                 if let PipelineOutput::Gaze { yaw, pitch, .. } = last_pipeline_output.as_ref().unwrap() {
-                                     let eff_yaw = if mirror_mode { -(*yaw) } else { *yaw };
+                                     // Do NOT invert yaw for mirror mode here. 
+                                     // The calibration gain already accounts for the relationship between Raw Gaze and Screen Target.
+                                     // Inverting it here breaks the calibration.
+                                     let eff_yaw = *yaw;
                                      screen_x += eff_yaw * 20.0;
                                      screen_y -= pitch * 20.0;
                                 }

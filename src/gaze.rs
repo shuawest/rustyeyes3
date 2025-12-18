@@ -80,15 +80,13 @@ impl Pipeline for SimulatedGazePipeline {
              let lx = calc_center(&left_indices);
              let rx = calc_center(&right_indices);
              
-             // Sensitivity Gain
-             let yaw_gain = 1.5;
-             let pitch_gain = 2.5;
+             let (final_yaw, final_pitch) = compute_simulated_gaze(y, p);
              
              return Ok(Some(PipelineOutput::Gaze {
                  left_eye: lx,
                  right_eye: rx,
-                 yaw: y * yaw_gain,
-                 pitch: p * pitch_gain,
+                 yaw: final_yaw,
+                 pitch: final_pitch,
                  roll: r,
                  vector: Point3D { x: 0.0, y: 0.0, z: 1.0 },
                  landmarks: Some(l.clone()),
@@ -97,6 +95,20 @@ impl Pipeline for SimulatedGazePipeline {
         
         Ok(None)
     }
+}
+
+// Pure function for regression testing
+pub fn compute_simulated_gaze(head_yaw: f32, head_pitch: f32) -> (f32, f32) {
+     // Sensitivity Gain
+     let yaw_gain = 1.5;
+     let pitch_gain = 2.5;
+     
+     // CRITICAL REGRESSION CHECK:
+     // Head Left is Negative Yaw in our coordinate system.
+     // Gaze Left should be Negative.
+     // Invert input to output?
+     // Current working logic: yaw = -y * gain.
+     (-head_yaw * yaw_gain, head_pitch * pitch_gain)
 }
 
 // =========================================================================
@@ -215,22 +227,12 @@ impl Pipeline for PupilGazePipeline {
              let ay = (ldy + rdy) / 2.0;
              
              // 3. Map to Gaze Angles
-             // Head Pose Gain
-             let head_yaw_gain = 1.5;
-             let head_pitch_gain = 2.5; 
-             
-             // Eye movement Gain (How much pupil shift affects gaze angle)
-             // Pupil shift 1.0 (edge of eye) ~= 30 degrees?
-             let pupil_gain_x = 40.0; // degrees
-             let pupil_gain_y = 30.0; // degrees
-             
-             let final_yaw = (y * head_yaw_gain) + (ax * pupil_gain_x);
-             let final_pitch = (p * head_pitch_gain) + (ay * pupil_gain_y);
+             let (final_yaw, final_pitch) = compute_pupil_gaze(y, p, ax, ay);
              
              return Ok(Some(PipelineOutput::Gaze {
                  left_eye: lx,
                  right_eye: rx,
-                 yaw: final_yaw,
+                 yaw: final_yaw, 
                  pitch: final_pitch,
                  roll: r,
                  vector: Point3D { x: 0.0, y: 0.0, z: 1.0 },
@@ -240,6 +242,28 @@ impl Pipeline for PupilGazePipeline {
         
         Ok(None)
     }
+}
+
+pub fn compute_pupil_gaze(
+    head_yaw: f32, 
+    head_pitch: f32, 
+    pupil_offset_x: f32, 
+    pupil_offset_y: f32
+) -> (f32, f32) {
+     // Head Pose Gain
+     let head_yaw_gain = 1.5;
+     let head_pitch_gain = 2.5; 
+     
+     // Eye movement Gain (How much pupil shift affects gaze angle)
+     // Pupil shift 1.0 (edge of eye) ~= 30 degrees?
+     let pupil_gain_x = 40.0; // degrees
+     let pupil_gain_y = 30.0; // degrees
+     
+     let raw_yaw = (head_yaw * head_yaw_gain) + (pupil_offset_x * pupil_gain_x);
+     let raw_pitch = (head_pitch * head_pitch_gain) + (pupil_offset_y * pupil_gain_y);
+     
+     // Invert to match L2CS behavior (verified "Head left -> dot right" with positive)
+     (-raw_yaw, raw_pitch)
 }
 
 // =========================================================================
@@ -402,10 +426,12 @@ impl Pipeline for L2CSPipeline {
              // Or 28 bins?
              // Let's guess 90 bins, range -90..90, step 180/90 = 2? Or step 4?
              // Original: 90 bins, corresponds to -90 to 90 degrees.
+             // Official L2CS implementation uses 4 degrees per bin: idx * 4 - 180
+             // range = 360, start = -180
              let bins = out0.len(); 
-             let range = 180.0; // -90 to 90
-             let step = range / bins as f32;
-             let start = -90.0;
+             let range = 360.0; // -180 to 180
+             let step = range / bins as f32; // step = 4.0
+             let start = -180.0;
              
              let val0 = Self::expectation(&prob0, start, step);
              let val1 = Self::expectation(&prob1, start, step);
@@ -419,26 +445,29 @@ impl Pipeline for L2CSPipeline {
              // We'll update the Gaze output.
              // Let's map 0->Pitch, 1->Yaw.
              
-             let pitch_deg = val0;
-             let yaw_deg = val1;
-             
-             // Apply Sensitivity Gain (for Screen Control)
-             let pitch_gain = self.params.pitch_gain;
-             let yaw_gain = self.params.yaw_gain;
-             
-             // Offset to compensative for webcam placement (looking down at screen)
-             let pitch_offset = self.params.pitch_offset;
-             let yaw_offset = self.params.yaw_offset;
-             
-             let p_gained = -(pitch_deg - pitch_offset) * pitch_gain;
-             let y_gained = (yaw_deg - yaw_offset) * yaw_gain;
+             // Swapped based on correlation analysis (out0 is Yaw, out1 is Pitch)
+             let yaw_deg = val0;
+             let pitch_deg = val1;
+                          // Polynomial Calibration
+              // val = a*x^2 + b*x + c
+              // x = raw degrees
+              // params: curve=a, gain=b, offset=c
+              
+              let y_raw = yaw_deg;
+              let p_raw = pitch_deg;
+              
+              // Note: Offset is now the constant term 'c', not a subtraction pre-gain.
+              let y_gained = self.params.yaw_curve * y_raw * y_raw + self.params.yaw_gain * y_raw + self.params.yaw_offset;
+              
+              // Invert pitch result to satisfy main.rs subtraction logic
+              let p_gained = -(self.params.pitch_curve * p_raw * p_raw + self.params.pitch_gain * p_raw + self.params.pitch_offset);
              
              // Apply Smoothing
              let (y_smooth, p_smooth) = self.smoothing.filter(y_gained, p_gained);
              
              // Debug
-             println!("L2CS: idx=({:.1}, {:.1}) deg=({:.1}, {:.1}) out=({:.2}, {:.2})", 
-                pitch_idx, yaw_idx, pitch_deg, yaw_deg, p_smooth, y_smooth);
+             // println!("L2CS: idx=({:.1}, {:.1}) deg=({:.1}, {:.1}) out=({:.2}, {:.2})", 
+             //    pitch_idx, yaw_idx, pitch_deg, yaw_deg, p_smooth, y_smooth);
              
              // Eye Center Calculation (for UI lines)
              // Reuse geometric centers from mesh
@@ -580,6 +609,7 @@ impl Pipeline for MobileGazePipeline {
             let crop = image::imageops::crop_imm(frame, sx as u32, sy as u32, sw as u32, sh as u32).to_image();
             
             // 3. Resize & Normalize (MobileGaze via L2CS repo also uses 448)
+            let _ = crop.save("debug_face_crop.png"); // Save the cropped image
             let resized = image::imageops::resize(&crop, 448, 448, FilterType::Triangle);
             
              let mut input_data = Vec::with_capacity(1 * 3 * 448 * 448);
@@ -613,10 +643,12 @@ impl Pipeline for MobileGazePipeline {
              let prob0 = Self::softmax(out0);
              let prob1 = Self::softmax(out1);
              
+             // MobileGaze shared format: 
+             // range = 360, start = -180
              let bins = out0.len(); 
-             let range = 180.0;
+             let range = 360.0;
              let step = range / bins as f32;
-             let start = -90.0;
+             let start = -180.0;
              
              let val0 = Self::expectation(&prob0, start, step);
              let val1 = Self::expectation(&prob1, start, step);
@@ -625,24 +657,24 @@ impl Pipeline for MobileGazePipeline {
              let pitch_idx = Self::expectation(&prob0, 0.0, 1.0);
              let yaw_idx = Self::expectation(&prob1, 0.0, 1.0);
              
-             let pitch_deg = val0;
-             let yaw_deg = val1;
-             
-             // Gain
-             let pitch_gain = self.params.pitch_gain;
-             let yaw_gain = self.params.yaw_gain;
-             let pitch_offset = self.params.pitch_offset;
-             let yaw_offset = self.params.yaw_offset;
-             
-             let p_gained = -(pitch_deg - pitch_offset) * pitch_gain;
-             let y_gained = (yaw_deg - yaw_offset) * yaw_gain;
+              // Swapped based on correlation analysis
+              // CRITICAL: We invert output here to match L2CS standard (Negative = Left).
+              // Original MobileGaze output was inverted relative to L2CS.
+              let yaw_deg = -val0; 
+              let pitch_deg = val1;
+                          // Polynomial Calibration
+              let y_raw = yaw_deg;
+              let p_raw = pitch_deg;
+              
+              let y_gained = self.params.yaw_curve * y_raw * y_raw + self.params.yaw_gain * y_raw + self.params.yaw_offset;
+              let p_gained = -(self.params.pitch_curve * p_raw * p_raw + self.params.pitch_gain * p_raw + self.params.pitch_offset);
              
              // Smoothing
              let (y_smooth, p_smooth) = self.smoothing.filter(y_gained, p_gained);
              
              // Debug
-             println!("Mobile: idx=({:.1}, {:.1}) deg=({:.1}, {:.1}) out=({:.2}, {:.2})", 
-                pitch_idx, yaw_idx, pitch_deg, yaw_deg, p_smooth, y_smooth);
+             // println!("Mobile: idx=({:.1}, {:.1}) deg=({:.1}, {:.1}) out=({:.2}, {:.2})", 
+             //    pitch_idx, yaw_idx, pitch_deg, yaw_deg, p_smooth, y_smooth);
              
              // Eye Centers
               let left_indices = [33, 133]; 

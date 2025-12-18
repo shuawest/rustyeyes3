@@ -16,7 +16,7 @@ target/
 *.gz
 
 # Calibration Data
-calibration_data/
+*# calibration_data/
 
 # Editor/IDE
 .vscode/

@@ -1,0 +1,258 @@
+[
+  {
+    "run_id": "20251217_234924",
+    "timestamp": "2025-12-17T23:50:03.832883-05:00",
+    "model": "l2cs",
+    "params": {
+      "yaw_offset": 0.11296778,
+      "pitch_offset": 0.00045747135,
+      "yaw_gain": -0.20175867,
+      "pitch_gain": -0.0019458437
+    },
+    "metrics": {
+      "mean_error_px": 694.05225,
+      "std_dev_px": 325.06937,
+      "max_error_px": 1075.043
+    }
+  },
+  {
+    "run_id": "20251217_234924",
+    "timestamp": "2025-12-17T23:50:03.833889-05:00",
+    "model": "mobile",
+    "params": {
+      "yaw_offset": -0.01015409,
+      "pitch_offset": 0.00029231113,
+      "yaw_gain": -0.15837121,
+      "pitch_gain": -0.012533719
+    },
+    "metrics": {
+      "mean_error_px": 689.64233,
+      "std_dev_px": 327.65436,
+      "max_error_px": 1004.2981
+    }
+  },
+  {
+    "run_id": "20251218_000147",
+    "timestamp": "2025-12-18T00:02:27.434308-05:00",
+    "model": "l2cs",
+    "params": {
+      "yaw_offset": 0.07644742,
+      "pitch_offset": -0.004430662,
+      "yaw_gain": -0.1498201,
+      "pitch_gain": -0.04478446
+    },
+    "metrics": {
+      "mean_error_px": 694.4299,
+      "std_dev_px": 321.41867,
+      "max_error_px": 1065.046
+    }
+  },
+  {
+    "run_id": "20251218_000147",
+    "timestamp": "2025-12-18T00:02:27.435302-05:00",
+    "model": "mobile",
+    "params": {
+      "yaw_offset": -0.01015409,
+      "pitch_offset": 0.00029231113,
+      "yaw_gain": -0.15837121,
+      "pitch_gain": -0.012533719
+    },
+    "metrics": {
+      "mean_error_px": 689.64233,
+      "std_dev_px": 327.65436,
+      "max_error_px": 1004.2981
+    }
+  },
+  {
+    "run_id": "20251218_080632",
+    "timestamp": "2025-12-18T08:07:11.934587-05:00",
+    "model": "l2cs",
+    "params": {
+      "yaw_offset": 0.0,
+      "pitch_offset": 0.0,
+      "yaw_gain": 0.0,
+      "pitch_gain": 0.0
+    },
+    "metrics": {
+      "mean_error_px": 701.64417,
+      "std_dev_px": 315.8853,
+      "max_error_px": 1033.561
+    }
+  },
+  {
+    "run_id": "20251218_080632",
+    "timestamp": "2025-12-18T08:07:11.964385-05:00",
+    "model": "mobile",
+    "params": {
+      "yaw_offset": 0.0,
+      "pitch_offset": 0.0,
+      "yaw_gain": 0.0,
+      "pitch_gain": 0.0
+    },
+    "metrics": {
+      "mean_error_px": 701.64417,
+      "std_dev_px": 315.8853,
+      "max_error_px": 1033.561
+    }
+  },
+  {
+    "run_id": "20251218_082051",
+    "timestamp": "2025-12-18T08:21:31.067128-05:00",
+    "model": "l2cs",
+    "params": {
+      "yaw_offset": 0.0,
+      "pitch_offset": 0.0,
+      "yaw_gain": 0.0,
+      "pitch_gain": 0.0
+    },
+    "metrics": {
+      "mean_error_px": 701.64417,
+      "std_dev_px": 315.8853,
+      "max_error_px": 1033.561
+    }
+  },
+  {
+    "run_id": "20251218_082051",
+    "timestamp": "2025-12-18T08:21:31.099787-05:00",
+    "model": "mobile",
+    "params": {
+      "yaw_offset": 0.0,
+      "pitch_offset": 0.0,
+      "yaw_gain": 0.0,
+      "pitch_gain": 0.0
+    },
+    "metrics": {
+      "mean_error_px": 701.64417,
+      "std_dev_px": 315.8853,
+      "max_error_px": 1033.561
+    }
+  },
+  {
+    "run_id": "20251218_082230",
+    "timestamp": "2025-12-18T08:23:10.535652-05:00",
+    "model": "l2cs",
+    "params": {
+      "yaw_offset": 9.173704,
+      "pitch_offset": -1.7201699,
+      "yaw_gain": -3.8397164,
+      "pitch_gain": -5.0299525
+    },
+    "metrics": {
+      "mean_error_px": 718.8112,
+      "std_dev_px": 272.45297,
+      "max_error_px": 1236.7361
+    }
+  },
+  {
+    "run_id": "20251218_082230",
+    "timestamp": "2025-12-18T08:23:10.576701-05:00",
+    "model": "mobile",
+    "params": {
+      "yaw_offset": 4.1585875,
+      "pitch_offset": -4.2931275,
+      "yaw_gain": -1.8105986,
+      "pitch_gain": -3.5632396
+    },
+    "metrics": {
+      "mean_error_px": 784.72345,
+      "std_dev_px": 369.74103,
+      "max_error_px": 1619.1967
+    }
+  },
+  {
+    "run_id": "20251218_082408",
+    "timestamp": "2025-12-18T08:24:47.509684-05:00",
+    "model": "l2cs",
+    "params": {
+      "yaw_offset": 9.173701,
+      "pitch_offset": -1.7201701,
+      "yaw_gain": -3.8397171,
+      "pitch_gain": -5.029955
+    },
+    "metrics": {
+      "mean_error_px": 718.8112,
+      "std_dev_px": 272.4531,
+      "max_error_px": 1236.7363
+    }
+  },
+  {
+    "run_id": "20251218_082408",
+    "timestamp": "2025-12-18T08:24:47.510027-05:00",
+    "model": "mobile",
+    "params": {
+      "yaw_offset": 4.1585774,
+      "pitch_offset": -4.29313,
+      "yaw_gain": -1.8105996,
+      "pitch_gain": -3.5632405
+    },
+    "metrics": {
+      "mean_error_px": 784.7233,
+      "std_dev_px": 369.74164,
+      "max_error_px": 1619.197
+    }
+  },
+  {
+    "run_id": "20251218_082726",
+    "timestamp": "2025-12-18T08:27:31.492834-05:00",
+    "model": "l2cs",
+    "params": {
+      "yaw_offset": 9.173701,
+      "pitch_offset": -1.7201701,
+      "yaw_gain": -3.8397171,
+      "pitch_gain": -5.029955
+    },
+    "metrics": {
+      "mean_error_px": 718.8112,
+      "std_dev_px": 272.4531,
+      "max_error_px": 1236.7363
+    }
+  },
+  {
+    "run_id": "20251218_082726",
+    "timestamp": "2025-12-18T08:27:31.493072-05:00",
+    "model": "mobile",
+    "params": {
+      "yaw_offset": 4.1585774,
+      "pitch_offset": -4.29313,
+      "yaw_gain": -1.8105996,
+      "pitch_gain": -3.5632405
+    },
+    "metrics": {
+      "mean_error_px": 784.7233,
+      "std_dev_px": 369.74164,
+      "max_error_px": 1619.197
+    }
+  },
+  {
+    "run_id": "20251218_083521",
+    "timestamp": "2025-12-18T08:36:03.289602-05:00",
+    "model": "l2cs",
+    "params": {
+      "yaw_offset": 18.347403,
+      "pitch_offset": -3.4403403,
+      "yaw_gain": -1.9198586,
+      "pitch_gain": -2.5149775
+    },
+    "metrics": {
+      "mean_error_px": 718.8112,
+      "std_dev_px": 272.4531,
+      "max_error_px": 1236.7363
+    }
+  },
+  {
+    "run_id": "20251218_083521",
+    "timestamp": "2025-12-18T08:36:03.289958-05:00",
+    "model": "mobile",
+    "params": {
+      "yaw_offset": 8.317155,
+      "pitch_offset": -8.58626,
+      "yaw_gain": -0.9052998,
+      "pitch_gain": -1.7816203
+    },
+    "metrics": {
+      "mean_error_px": 784.7233,
+      "std_dev_px": 369.74164,
+      "max_error_px": 1619.197
+    }
+  }
+]

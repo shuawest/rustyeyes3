@@ -1,0 +1,29 @@
+{
+  "timestamp": 1766011375232,
+  "screen_x": 37.15625,
+  "screen_y": 93.24219,
+  "inference": {
+    "Gaze": {
+      "left_eye": {
+        "x": 950.7866,
+        "y": 314.35223,
+        "z": 0.0
+      },
+      "right_eye": {
+        "x": 1104.7173,
+        "y": 316.0458,
+        "z": 0.0
+      },
+      "yaw": -14.57361,
+      "pitch": 62.81675,
+      "roll": 2.6568198,
+      "vector": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 1.0
+      },
+      "landmarks": null
+    }
+  },
+  "moondream_result": null
+}

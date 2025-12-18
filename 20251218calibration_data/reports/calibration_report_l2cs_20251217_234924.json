@@ -1,0 +1,287 @@
+{
+  "run_id": "20251217_234924",
+  "timestamp": "2025-12-17T23:50:03.832860-05:00",
+  "model": "l2cs",
+  "summary": {
+    "mean_error": 694.05225,
+    "std_dev": 325.06937,
+    "max_error": 1075.043,
+    "histogram": [
+      {
+        "range": "0-50px",
+        "count": 1
+      },
+      {
+        "range": "50-100px",
+        "count": 1
+      },
+      {
+        "range": "100-200px",
+        "count": 3
+      },
+      {
+        "range": "200-500px",
+        "count": 0
+      },
+      {
+        "range": "500px+",
+        "count": 18
+      }
+    ]
+  },
+  "entries": [
+    {
+      "filename": "img_1766011387907.jpg",
+      "target_x": 843.5703,
+      "target_y": 539.28906,
+      "raw_yaw": -19.018232,
+      "raw_pitch": 57.70592,
+      "calibrated_x": 797.1977,
+      "calibrated_y": 452.24573,
+      "delta_pixels": 98.62536,
+      "error_percent": 5.807926
+    },
+    {
+      "filename": "img_1766014689716.jpg",
+      "target_x": 1649.375,
+      "target_y": 62.476562,
+      "raw_yaw": 16.2812,
+      "raw_pitch": 72.544846,
+      "calibrated_x": 654.75836,
+      "calibrated_y": 452.8232,
+      "delta_pixels": 1068.4722,
+      "error_percent": 62.921013
+    },
+    {
+      "filename": "img_1766011333952.jpg",
+      "target_x": 87.10156,
+      "target_y": 697.4531,
+      "raw_yaw": -19.359455,
+      "raw_pitch": -16.481098,
+      "calibrated_x": 798.5746,
+      "calibrated_y": 449.35858,
+      "delta_pixels": 753.4884,
+      "error_percent": 44.372005
+    },
+    {
+      "filename": "img_1766011363462.jpg",
+      "target_x": 42.73828,
+      "target_y": 933.64844,
+      "raw_yaw": -36.40383,
+      "raw_pitch": -3.8399696,
+      "calibrated_x": 867.3516,
+      "calibrated_y": 449.85056,
+      "delta_pixels": 956.05835,
+      "error_percent": 56.301105
+    },
+    {
+      "filename": "img_1765997461159.jpg",
+      "target_x": 1076.6445,
+      "target_y": 973.9961,
+      "raw_yaw": -16.536749,
+      "raw_pitch": 19.096695,
+      "calibrated_x": 787.1845,
+      "calibrated_y": 450.74316,
+      "delta_pixels": 597.9805,
+      "error_percent": 35.214336
+    },
+    {
+      "filename": "img_1766014715193.jpg",
+      "target_x": 8.859375,
+      "target_y": 10.0,
+      "raw_yaw": 1.9500794,
+      "raw_pitch": 8.778734,
+      "calibrated_x": 712.5869,
+      "calibrated_y": 450.3416,
+      "delta_pixels": 830.14044,
+      "error_percent": 48.885952
+    },
+    {
+      "filename": "img_1766011391542.jpg",
+      "target_x": 1646.4141,
+      "target_y": 908.22656,
+      "raw_yaw": -23.296669,
+      "raw_pitch": 84.8884,
+      "calibrated_x": 814.4619,
+      "calibrated_y": 453.30356,
+      "delta_pixels": 948.2085,
+      "error_percent": 55.838837
+    },
+    {
+      "filename": "img_1766011396243.jpg",
+      "target_x": 59.472656,
+      "target_y": 76.96094,
+      "raw_yaw": -3.3931355,
+      "raw_pitch": -9.2591715,
+      "calibrated_x": 734.1477,
+      "calibrated_y": 449.63965,
+      "delta_pixels": 770.7631,
+      "error_percent": 45.389294
+    },
+    {
+      "filename": "img_1766009756336.jpg",
+      "target_x": 1634.4023,
+      "target_y": 931.78516,
+      "raw_yaw": -36.03429,
+      "raw_pitch": 29.465227,
+      "calibrated_x": 865.8605,
+      "calibrated_y": 451.14667,
+      "delta_pixels": 906.46014,
+      "error_percent": 53.38032
+    },
+    {
+      "filename": "img_1766011347727.jpg",
+      "target_x": 1608.25,
+      "target_y": 937.5781,
+      "raw_yaw": -25.200148,
+      "raw_pitch": 15.411067,
+      "calibrated_x": 822.1428,
+      "calibrated_y": 450.59973,
+      "delta_pixels": 924.7229,
+      "error_percent": 54.4558
+    },
+    {
+      "filename": "img_1766009741426.jpg",
+      "target_x": 1600.3555,
+      "target_y": 56.59375,
+      "raw_yaw": -11.586426,
+      "raw_pitch": 21.151636,
+      "calibrated_x": 767.2091,
+      "calibrated_y": 450.82315,
+      "delta_pixels": 921.7102,
+      "error_percent": 54.27838
+    },
+    {
+      "filename": "img_1766009752231.jpg",
+      "target_x": 37.691406,
+      "target_y": 66.921875,
+      "raw_yaw": -0.47195673,
+      "raw_pitch": -16.580381,
+      "calibrated_x": 722.3603,
+      "calibrated_y": 449.35474,
+      "delta_pixels": 784.23615,
+      "error_percent": 46.182705
+    },
+    {
+      "filename": "img_1766009748309.jpg",
+      "target_x": 53.382812,
+      "target_y": 899.5078,
+      "raw_yaw": -15.670814,
+      "raw_pitch": -24.45241,
+      "calibrated_x": 783.6903,
+      "calibrated_y": 449.04837,
+      "delta_pixels": 858.05756,
+      "error_percent": 50.529957
+    },
+    {
+      "filename": "img_1766011375232.jpg",
+      "target_x": 37.15625,
+      "target_y": 93.24219,
+      "raw_yaw": 4.3009133,
+      "raw_pitch": -14.709902,
+      "calibrated_x": 703.1009,
+      "calibrated_y": 449.42752,
+      "delta_pixels": 755.2154,
+      "error_percent": 44.47371
+    },
+    {
+      "filename": "img_1766014719643.jpg",
+      "target_x": 0.0,
+      "target_y": -71.0,
+      "raw_yaw": 2.3365622,
+      "raw_pitch": 13.992295,
+      "calibrated_x": 711.0274,
+      "calibrated_y": 450.54453,
+      "delta_pixels": 881.7985,
+      "error_percent": 51.928032
+    },
+    {
+      "filename": "img_1766014739324.jpg",
+      "target_x": 850.85547,
+      "target_y": 526.02734,
+      "raw_yaw": -3.3187854,
+      "raw_pitch": 10.257297,
+      "calibrated_x": 733.8477,
+      "calibrated_y": 450.39917,
+      "delta_pixels": 139.32133,
+      "error_percent": 8.204462
+    },
+    {
+      "filename": "img_1766014710360.jpg",
+      "target_x": 597.71094,
+      "target_y": 514.125,
+      "raw_yaw": -7.100597,
+      "raw_pitch": 26.413984,
+      "calibrated_x": 749.108,
+      "calibrated_y": 451.02792,
+      "delta_pixels": 164.01921,
+      "error_percent": 9.65889
+    },
+    {
+      "filename": "img_1766009761861.jpg",
+      "target_x": 848.2578,
+      "target_y": 458.10156,
+      "raw_yaw": -24.579891,
+      "raw_pitch": 11.73389,
+      "calibrated_x": 819.63995,
+      "calibrated_y": 450.45663,
+      "delta_pixels": 29.621391,
+      "error_percent": 1.7443674
+    },
+    {
+      "filename": "img_1766014697788.jpg",
+      "target_x": 1376.8359,
+      "target_y": 827.1094,
+      "raw_yaw": -8.290379,
+      "raw_pitch": 44.463913,
+      "calibrated_x": 753.90894,
+      "calibrated_y": 451.73038,
+      "delta_pixels": 727.2877,
+      "error_percent": 42.829082
+    },
+    {
+      "filename": "img_1766011382204.jpg",
+      "target_x": 807.7461,
+      "target_y": 559.8867,
+      "raw_yaw": -2.5254874,
+      "raw_pitch": -35.198982,
+      "calibrated_x": 730.6466,
+      "calibrated_y": 448.63016,
+      "delta_pixels": 135.36009,
+      "error_percent": 7.97119
+    },
+    {
+      "filename": "img_1766011341415.jpg",
+      "target_x": 1601.3398,
+      "target_y": 144.05078,
+      "raw_yaw": -2.803412,
+      "raw_pitch": 50.737003,
+      "calibrated_x": 731.7681,
+      "calibrated_y": 451.97452,
+      "delta_pixels": 922.48145,
+      "error_percent": 54.3238
+    },
+    {
+      "filename": "img_1766014687025.jpg",
+      "target_x": 1649.375,
+      "target_y": 62.476562,
+      "raw_yaw": 18.045498,
+      "raw_pitch": 68.34248,
+      "calibrated_x": 647.63916,
+      "calibrated_y": 452.65967,
+      "delta_pixels": 1075.043,
+      "error_percent": 63.30796
+    },
+    {
+      "filename": "img_1766014708127.jpg",
+      "target_x": 35.539062,
+      "target_y": 550.8281,
+      "raw_yaw": -5.4859567,
+      "raw_pitch": 14.286408,
+      "calibrated_x": 742.59265,
+      "calibrated_y": 450.55597,
+      "delta_pixels": 714.12836,
+      "error_percent": 42.054142
+    }
+  ]
+}
