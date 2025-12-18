@@ -236,23 +236,25 @@ fn main() -> anyhow::Result<()> {
                         let eff_yaw = if mirror_mode { -yaw } else { *yaw };
                         // Precise calculation matching drawing logic
                         let mut sx = width as f32 / 2.0; 
-                       let mut sy = height as f32 / 2.0;
-                       sx += eff_yaw * 20.0;
-                       sy -= pitch * 20.0;
-                       Some((sx, sy))
-                  } else { None }
+                        let mut sy = height as f32 / 2.0;
+                        sx += eff_yaw * 20.0;
+                        sy -= pitch * 20.0;
+                        Some((sx, sy))
+                   } else { None }
              } else { None };
 
-             // We use try_send on a bounded channel (1). 
-             // If worker is busy, this fails immediately and we skip sending the frame.
-             let result = tx_frame.try_send((img, current_gaze_coords, None));
-             if result.is_ok() {
-                  // SUCCESS: We sent a frame to Moondream.
-                  // Update state to PENDING and show immediate capture dot.
-                  moondream_pending = true;
-                  if let Some(coords) = current_gaze_coords {
-                       captured_gaze_result = Some(coords);
-                  }
+             // Only dispatch if we have a valid gaze to verify!
+             // Otherwise we get stale "Green Dots" from previous captures.
+             if let Some(coords) = current_gaze_coords {
+                 // We use try_send on a bounded channel (1). 
+                 // If worker is busy, this fails immediately and we skip sending the frame.
+                 let result = tx_frame.try_send((img, Some(coords), None));
+                 if result.is_ok() {
+                      // SUCCESS: We sent a frame to Moondream.
+                      // Update state to PENDING and show immediate capture dot.
+                      moondream_pending = true;
+                      captured_gaze_result = Some(coords);
+                 }
              }
         }
 
@@ -285,9 +287,12 @@ fn main() -> anyhow::Result<()> {
                     if moondream_active {
                         moondream_active = false;
                         moondream_result = None;
+                        captured_gaze_result = None; // clear green dot
                         moondream_pending = false;
                     } else {
                         moondream_active = true;
+                        captured_gaze_result = None; // start fresh
+                        moondream_result = None;
                     }
                 },
                 minifb::Key::Space => {

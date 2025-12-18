@@ -93,7 +93,7 @@ class OverlayView: NSView {
             // Center Dot (Gold)
             let msRadius: CGFloat = 6.0
             let msRect = NSRect(x: mdX - msRadius, y: mdY - msRadius, width: msRadius * 2, height: msRadius * 2)
-            NSColor(red: 1.0, green: 0.84, blue: 0.0, alpha: 1.0).setFill()
+            NSColor.yellow.setFill()
             NSBezierPath(ovalIn: msRect).fill()
         }
         

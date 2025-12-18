@@ -41,9 +41,19 @@ This document outlines manual verification steps to be performed before releasin
 
 **Risk Area**: Coordinate mapping, File I/O.
 
-**Protocol**:
+### Calibration Verification
 
-1. Toggle Calibration [9] -> ON.
-2. Spacebar Capture.
-   - [ ] Log output: `[CALIBRATION] Captured Point...`.
-   - [ ] Overlay: "LAST CAL: (x, y)" updates.
+- [ ] Toggle Calibration Mode `[9]`.
+- [ ] Press Spacebar while looking at various points.
+- [ ] Verify console logs: `[CALIBRATION] Captured Point...`
+- [ ] Verify HUD shows: `LAST CAL: x, y`.
+
+### Visual Feedback & Dot Semantics
+
+- [ ] **Blue Dot**: Move head. Dot tracks in real-time. Mirror mode `[5]` flips movement correctly.
+- [ ] **Moondream Cycle**:
+  - Enable `[7]`.
+  - **Capture**: Green Dot (Red Center) appears immediately at Blue Dot location.
+  - **Result**: Cyan Dot + Green Dot turn Yellow-Centered after ~5-10s.
+  - **Regression Test**: Ensure Green/Red dot does _not_ jump to a random old location when starting. It must spawn exaclty where Blue was.
+    )" updates.
