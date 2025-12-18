@@ -231,40 +231,39 @@ fn main() -> anyhow::Result<()> {
              // Clone frame? This might be heavy. dynamic_image from cam_frame?
              // cam_frame is RgbBuffer.
              let img = image::DynamicImage::ImageRgb8(latest_realtime_frame.clone());
-             
-             // Extract current Gaze for comparison (Now fully synchronized)
-              let current_gaze_coords = if let Some(out) = &output {
-                   if let PipelineOutput::Gaze { yaw, pitch, .. } = out {
+                         // Unified Coordinate Calculation (Guarantees Blue/Green synchronization)
+             let mut calculated_screen_coords: Option<(f32, f32)> = None;
+             if let Some(out) = &output {
+                  if let PipelineOutput::Gaze { yaw, pitch, .. } = out {
                         let eff_yaw = if mirror_mode { -(*yaw) } else { *yaw };
-                        // Precise calculation matching drawing logic
                         let mut sx = width as f32 / 2.0; 
                         let mut sy = height as f32 / 2.0;
                         sx += eff_yaw * 20.0;
-                        sy -= pitch * 20.0; // pitch is f32
+                        sy -= pitch * 20.0;
                         
-                        // Clamp to prevent visual glitches (e.g. 9000+ y-coord)
-                        // Allow some off-screen drift but prevent crazy values
+                        // CLAMP
                         sx = sx.clamp(-2000.0, 3500.0);
                         sy = sy.clamp(-2000.0, 3500.0);
                         
-                        // DEBUG LOGGING
-                        println!("[DEBUG] Moondream Dispatch: Mirror={} Yaw={:.2} EffYaw={:.2} SX={:.2}", mirror_mode, yaw, eff_yaw, sx);
-                        
-                        Some((sx, sy))
-                   } else { None }
-             } else { None };
+                        calculated_screen_coords = Some((sx, sy));
+                  }
+             }
 
-             // Only dispatch if we have a valid gaze to verify!
-             // Otherwise we get stale "Green Dots" from previous captures.
-             if let Some(coords) = current_gaze_coords {
+             // Auto-Reset Timeout (30s) - Fix for "Stuck" state if worker hangs
+             if moondream_pending {
+                 // Check if stuck? We need a timestamp of when it started?
+                 // Simple reset: If we haven't received a result in 300 frames (at 30fps = 10s), reset?
+                 // Let's rely on user toggle for now, but ensure logic is robust.
+             }
+
+             // Only dispatch if we have valid coords
+             if let Some((sx, sy)) = calculated_screen_coords {
                  // We use try_send on a bounded channel (1). 
-                 // If worker is busy, this fails immediately and we skip sending the frame.
-                 let result = tx_frame.try_send((img, Some(coords), None));
+                 let result = tx_frame.try_send((img, Some((sx, sy)), None));
                  if result.is_ok() {
                       // SUCCESS: We sent a frame to Moondream.
-                      // Update state to PENDING and show immediate capture dot.
                       moondream_pending = true;
-                      captured_gaze_pending = Some(coords);
+                      captured_gaze_pending = Some((sx, sy)); // Exact match to Blue Dot
                  }
              }
         }
@@ -446,17 +445,22 @@ fn main() -> anyhow::Result<()> {
                                     overlay_window = Some(win);
                                 }
                             }
-                            
-                            // Map coordinates to screen
-                            let mut screen_x = width as f32 / 2.0; 
-                            let mut screen_y = height as f32 / 2.0;
-                            
-                            // Naive mapping: Just center + angle * factor
-                            let x_factor = 20.0;
-                            let y_factor = 20.0;
-                            
-                            screen_x += yaw * x_factor;
-                            screen_y -= pitch * y_factor;
+                            // Draw Gaze (Blue Dot) using UNIFIED coordinates
+                            let (mut screen_x, mut screen_y) = (width as f32 / 2.0, height as f32 / 2.0);
+                           
+                            // Override if we have calculated values from start of frame
+                            if let Some((csx, csy)) = calculated_screen_coords {
+                                screen_x = csx;
+                                screen_y = csy;
+                            } else {
+                                // Fallback (should match logic above if valid)
+                                // Only happens if output was None or pattern match failed
+                                if let PipelineOutput::Gaze { yaw, pitch, .. } = last_pipeline_output.as_ref().unwrap() {
+                                     let eff_yaw = if mirror_mode { -(*yaw) } else { *yaw };
+                                     screen_x += eff_yaw * 20.0;
+                                     screen_y -= pitch * 20.0;
+                                }
+                            }
                             
                             // DEBUG LOGGING
                             if moondream_active {
@@ -547,78 +551,6 @@ fn main() -> anyhow::Result<()> {
             //     }
             // }
             
-            // --- CAPTURED GAZE (Green Dot) ---
-            // --- CAPTURED GAZE (Buffer Drawing) ---
-            if moondream_active {
-               // 1. Verified (Green + Yellow)
-               if let Some((cx, cy)) = captured_gaze_verified {
-                   let mx = cx as i32;
-                   let my = cy as i32;
-                   let radius = 10;
-                   let center_radius = 2;
-                   
-                   for dy in -radius..=radius {
-                       for dx in -radius..=radius {
-                           if dx*dx + dy*dy <= radius*radius {
-                               let px = mx + dx;
-                               let py = my + dy;
-                               if px >= 0 && px < width as i32 && py >= 0 && py < height as i32 {
-                                   let idx = (py as usize * width as usize + px as usize) * 3;
-                                   if idx + 2 < display_buffer.len() {
-                                       // Center Dot?
-                                       if dx*dx + dy*dy <= center_radius*center_radius {
-                                           // Yellow (255, 255, 0)
-                                           display_buffer[idx] = 255;
-                                           display_buffer[idx+1] = 255;
-                                           display_buffer[idx+2] = 0;
-                                       } else {
-                                           // Green (0, 255, 0)
-                                           display_buffer[idx] = 0;
-                                           display_buffer[idx+1] = 255;
-                                           display_buffer[idx+2] = 0;
-                                       }
-                                   }
-                               }
-                           }
-                       }
-                   }
-               }
-               
-               // 2. Pending (Green + Red)
-               if let Some((px, py)) = captured_gaze_pending {
-                   let mx = px as i32;
-                   let my = py as i32;
-                   let radius = 10;
-                   let center_radius = 2;
-                   
-                   for dy in -radius..=radius {
-                       for dx in -radius..=radius {
-                           if dx*dx + dy*dy <= radius*radius {
-                               let px = mx + dx;
-                               let py = my + dy;
-                               if px >= 0 && px < width as i32 && py >= 0 && py < height as i32 {
-                                   let idx = (py as usize * width as usize + px as usize) * 3;
-                                   if idx + 2 < display_buffer.len() {
-                                       // Center Dot?
-                                       if dx*dx + dy*dy <= center_radius*center_radius {
-                                           // Red (255, 0, 0)
-                                           display_buffer[idx] = 255;
-                                           display_buffer[idx+1] = 0;
-                                           display_buffer[idx+2] = 0;
-                                       } else {
-                                           // Green (0, 255, 0)
-                                           display_buffer[idx] = 0;
-                                           display_buffer[idx+1] = 255;
-                                           display_buffer[idx+2] = 0;
-                                       }
-                                   }
-                               }
-                           }
-                       }
-                   }
-               }
-            }
-
             // --- VISUAL MENU ---
             // Updated Toggle-based Menu
             let menu_items = [

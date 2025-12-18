@@ -26,8 +26,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - _Change_: Implemented simultaneous "Pending" (Green/Red) and "Verified" (Green/Yellow) dots for Moondream capture history. Updated `overlay_sidecar.swift` sizes to match Blue Dot (Radius 50).
   - _Intent_: Provide clearer visual history of VLM requests vs results.
 - **Unreleased - Coordinate Clamping**:
+
   - _Change_: Clamped gaze coordinates in `main.rs` to prevent visual anomalies (e.g. 9000+ Y-coord).
   - _Intent_: Prevent "missing dot" issues caused by transient ONNX glitches.
+
+- **Unreleased - Unified Tracking & Cleanup**:
+  - _Change_: Refactored `main.rs` to use a single coordinate calculation for both Realtime and Pending gaze, ensuring perfect synchronization. Removed legacy framebuffer drawing of dots to fix "little green ghost dot" artifact.
+  - _Intent_: Fix "Green-Red dot not tracking" issue and remove visual clutter.
 - **Unreleased - Debug Logging**:
   - _Change_: Enabled verbose request/response logging in `moondream.rs` (stdout) and `moondream_server.py` (stderr).
   - _Intent_: Provide visibility into the exact JSON payload being exchanged for debugging.

@@ -53,7 +53,7 @@ This document outlines manual verification steps to be performed before releasin
 - [ ] **Blue Dot**: Move head. Dot tracks in real-time. Mirror mode `[5]` flips movement correctly.
 - [ ] **Moondream Cycle**:
   - Enable `[7]`.
-  - **Capture Start**: A large **Green Dot (Red Center)** appears immediately at Blue Dot location (Pending).
-  - **Capture End**: After ~5-10s, the _Pending_ dot disappears. A **Green Dot (Yellow Center)** (Verified) and **Cyan Dot (Yellow Center)** (Result) appear.
-  - **Continuous**: If a new cycle starts before the old one fades (if configured?), you may see both Pending and Verified dots simultaneously.
-  - **Verification**: Ensure the "Verified" dot matches the location where the "Pending" dot WAS. They represent the same capture.
+  - **Capture Start**: A large **Green Dot (Red Center)** appears immediately at the _exact_ location of the Blue Dot.
+    - _Note_: This dot represents the _Pending Request_. It will remain "stuck" at the capture timestamp until the result returns (~10-15s). This is expected.
+  - **Capture End**: After ~10-15s, the Pending dot disappears. A **Green Dot (Yellow Center)** (Verified) and **Cyan Dot (Verify Result)** appear.
+  - **Verification**: Ensure no "little green ghost dots" appear. Only 50px Large dots should be visible.
