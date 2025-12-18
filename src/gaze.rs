@@ -1,11 +1,12 @@
 use image::{imageops::FilterType, ImageBuffer, Rgb};
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 use ort::session::{Session, builder::GraphOptimizationLevel};
 use std::path::Path;
 use crate::types::{PipelineOutput, Point3D};
 use crate::pipeline::Pipeline;
 use crate::inference::FaceMeshPipeline;
 use crate::head_pose::HeadPosePipeline;
+use crate::rectification::CalibrationParams;
 
 // =========================================================================
 // Smoothing Helper (Exponential Moving Average)
@@ -249,6 +250,7 @@ pub struct L2CSPipeline {
     session: Option<Session>,
     mesh_pipeline: FaceMeshPipeline,
     smoothing: Smoothing,
+    pub params: CalibrationParams,
 }
 
 impl L2CSPipeline {
@@ -274,6 +276,7 @@ impl L2CSPipeline {
             session,
             mesh_pipeline,
             smoothing: Smoothing::new(0.4),
+            params: CalibrationParams::default(),
         })
     }
     
@@ -290,6 +293,11 @@ impl L2CSPipeline {
             sum += prob * (range_min + i as f32 * step);
         }
         sum
+    }
+
+    pub fn process_raw_values(&mut self, frame: &ImageBuffer<Rgb<u8>, Vec<u8>>) -> Result<Option<PipelineOutput>> {
+        self.smoothing = Smoothing::new(0.4);
+        self.process(frame)
     }
 }
 
@@ -415,14 +423,15 @@ impl Pipeline for L2CSPipeline {
              let yaw_deg = val1;
              
              // Apply Sensitivity Gain (for Screen Control)
-             let pitch_gain = 5.0;
-             let yaw_gain = 5.0;
+             let pitch_gain = self.params.pitch_gain;
+             let yaw_gain = self.params.yaw_gain;
              
              // Offset to compensative for webcam placement (looking down at screen)
-             let pitch_offset = 12.0;
+             let pitch_offset = self.params.pitch_offset;
+             let yaw_offset = self.params.yaw_offset;
              
              let p_gained = -(pitch_deg - pitch_offset) * pitch_gain;
-             let y_gained = yaw_deg * yaw_gain;
+             let y_gained = (yaw_deg - yaw_offset) * yaw_gain;
              
              // Apply Smoothing
              let (y_smooth, p_smooth) = self.smoothing.filter(y_gained, p_gained);
@@ -458,16 +467,19 @@ impl Pipeline for L2CSPipeline {
         
         Ok(None)
     }
+
 }
 
 // =========================================================================
 // Pipeline 7: MobileGaze (MobileNetV2 Backbone)
 // High Speed, Lower Accuracy (~4ms on M1)
 // =========================================================================
+// #[derive(Clone)] (Cannot derive Clone easily for Session)
 pub struct MobileGazePipeline {
     session: Option<Session>,
     mesh_pipeline: FaceMeshPipeline,
     smoothing: Smoothing,
+    pub params: CalibrationParams,
 }
 
 impl MobileGazePipeline {
@@ -493,6 +505,7 @@ impl MobileGazePipeline {
             session,
             mesh_pipeline,
             smoothing: Smoothing::new(0.4),
+            params: CalibrationParams::default(),
         })
     }
     
@@ -510,6 +523,11 @@ impl MobileGazePipeline {
             sum += prob * (range_min + i as f32 * step);
         }
         sum
+    }
+
+    pub fn process_raw_values(&mut self, frame: &ImageBuffer<Rgb<u8>, Vec<u8>>) -> Result<Option<PipelineOutput>> {
+        self.smoothing = Smoothing::new(0.4);
+        self.process(frame)
     }
 }
 
@@ -611,13 +629,13 @@ impl Pipeline for MobileGazePipeline {
              let yaw_deg = val1;
              
              // Gain
-             let pitch_gain = 5.0;
-             let yaw_gain = 5.0;
-             
-             let pitch_offset = 12.0;
+             let pitch_gain = self.params.pitch_gain;
+             let yaw_gain = self.params.yaw_gain;
+             let pitch_offset = self.params.pitch_offset;
+             let yaw_offset = self.params.yaw_offset;
              
              let p_gained = -(pitch_deg - pitch_offset) * pitch_gain;
-             let y_gained = yaw_deg * yaw_gain;
+             let y_gained = (yaw_deg - yaw_offset) * yaw_gain;
              
              // Smoothing
              let (y_smooth, p_smooth) = self.smoothing.filter(y_gained, p_gained);
@@ -652,5 +670,7 @@ impl Pipeline for MobileGazePipeline {
         
         Ok(None)
     }
+
+
 }
 

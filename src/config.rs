@@ -1,7 +1,8 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
-use anyhow::Result;
+use anyhow::{Result, Context};
+use crate::rectification::CalibrationConfig;
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(default)]
@@ -9,6 +10,8 @@ pub struct AppConfig {
     pub defaults: Defaults,
     pub ui: UiConfig,
     pub models: Models,
+    #[serde(default)]
+    pub calibration: CalibrationConfig,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -65,6 +68,9 @@ impl Default for UiConfig {
 pub struct Models {
     pub l2cs_path: String,
     pub mobile_path: String,
+    pub face_detection_path: String,
+    pub face_mesh_path: String,
+    pub head_pose_path: String,
 }
 
 impl Default for Models {
@@ -72,6 +78,9 @@ impl Default for Models {
         Self {
             l2cs_path: "models/l2cs_net.onnx".to_string(),
             mobile_path: "models/mobile_gaze.onnx".to_string(),
+            face_detection_path: "models/face_detection.onnx".to_string(),
+            face_mesh_path: "models/face_mesh.onnx".to_string(),
+            head_pose_path: "models/head_pose.onnx".to_string(),
         }
     }
 }
@@ -82,31 +91,47 @@ impl Default for AppConfig {
             defaults: Defaults::default(),
             ui: UiConfig::default(),
             models: Models::default(),
+            calibration: CalibrationConfig::default(), // Added calibration default
         }
     }
 }
 
 impl AppConfig {
-    const PATH: &'static str = "config.json";
+    pub const DEFAULT_CONFIG_PATH: &str = "config.json";
+
 
     pub fn load() -> Result<Self> {
-        let config = if Path::new(Self::PATH).exists() {
-            let content = fs::read_to_string(Self::PATH)?;
-            // Attempt to load. serde_json::from_str will use Default for missing fields due to #[serde(default)]
-            match serde_json::from_str::<AppConfig>(&content) {
+        let config_path = Path::new(Self::DEFAULT_CONFIG_PATH);
+        let mut config: AppConfig = if config_path.exists() {
+            let data = fs::read_to_string(config_path).context("Failed to read config file")?;
+            match serde_json::from_str(&data) {
                 Ok(c) => {
-                    println!("Loaded configuration from {}", Self::PATH);
+                    println!("Loaded configuration from {}", Self::DEFAULT_CONFIG_PATH);
                     c
                 },
                 Err(e) => {
-                    println!("Error parsing config: {}. Loading defaults.", e);
-                    Self::default()
+                    println!("Failed to parse config: {}. Loading defaults.", e);
+                    AppConfig::default() 
                 }
             }
         } else {
-            println!("Configuration file not found. Creating default at {}", Self::PATH);
-            Self::default()
+            println!("Configuration file not found. Creating default at {}", Self::DEFAULT_CONFIG_PATH);
+            let defaults = AppConfig::default();
+            
+            // Write defaults to disk
+            if let Ok(content) = serde_json::to_string_pretty(&defaults) {
+                let _ = fs::write(Self::DEFAULT_CONFIG_PATH, content);
+            }
+            
+            defaults
         };
+        
+        // Save if we just created defaults (redundant but safe)
+        if !Path::new(Self::DEFAULT_CONFIG_PATH).exists() {
+             if let Ok(content) = serde_json::to_string_pretty(&config) {
+                 let _ = fs::write(Self::DEFAULT_CONFIG_PATH, content);
+             }
+        }
         
         // Always save back to ensure new fields are populated in the file
         config.save()?;
@@ -116,7 +141,7 @@ impl AppConfig {
 
     pub fn save(&self) -> Result<()> {
         let content = serde_json::to_string_pretty(self)?;
-        fs::write(Self::PATH, content)?;
+        fs::write(Self::DEFAULT_CONFIG_PATH, content)?;
         Ok(())
     }
 }

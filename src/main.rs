@@ -1,21 +1,24 @@
 use clap::Parser;
 
-mod args;
-mod camera;
-mod inference;
-mod output;
-mod types;
-mod detector;
-mod pipeline;
-mod head_pose;
-mod gaze;
-mod overlay;
-mod moondream;
-mod calibration;
-mod font;
-mod config;
-mod ttf;
+// Use modules from the library
+use rusty_eyes::args;
+use rusty_eyes::camera;
+use rusty_eyes::inference;
+use rusty_eyes::output;
+use rusty_eyes::types;
+use rusty_eyes::detector;
+use rusty_eyes::pipeline;
+use rusty_eyes::head_pose;
+use rusty_eyes::gaze;
+use rusty_eyes::overlay;
+use rusty_eyes::moondream;
+use rusty_eyes::calibration;
+use rusty_eyes::font;
+use rusty_eyes::config;
+use rusty_eyes::ttf;
+use rusty_eyes::rectification;
 
+use rusty_eyes::font::FONT_HEIGHT;
 use args::Args;
 use camera::CameraSource;
 use output::WindowOutput;
@@ -26,16 +29,29 @@ use calibration::CalibrationManager;
 use config::AppConfig;
 use ttf::FontRenderer;
 
-fn create_pipeline(name: &str, config: &AppConfig) -> Box<dyn Pipeline> {
-    match name {
-        "detection" => Box::new(inference::FaceDetectionPipeline::new("models/face_detection.onnx").unwrap()),
-        "pose" => Box::new(head_pose::HeadPosePipeline::new("models/head_pose.onnx", "models/face_detection.onnx").expect("Failed to load Pose")),
-        "head_gaze" => Box::new(gaze::SimulatedGazePipeline::new("models/face_mesh.onnx", "models/head_pose.onnx", "models/face_detection.onnx").expect("Failed to load Head Gaze")),
-        "pupil_gaze" => Box::new(gaze::PupilGazePipeline::new("models/face_mesh.onnx", "models/head_pose.onnx", "models/face_detection.onnx").expect("Failed to load Pupil Gaze")),
-        "l2cs" => Box::new(gaze::L2CSPipeline::new(&config.models.l2cs_path, "models/face_mesh.onnx", "models/face_detection.onnx").expect("Failed to load L2CS")),
-        "mobile" => Box::new(gaze::MobileGazePipeline::new(&config.models.mobile_path, "models/face_mesh.onnx", "models/face_detection.onnx").expect("Failed to load MobileGaze")),
-        "gaze" => Box::new(gaze::SimulatedGazePipeline::new("models/face_mesh.onnx", "models/head_pose.onnx", "models/face_detection.onnx").expect("Failed to load Gaze")), // Default alias
-        _ => Box::new(inference::FaceMeshPipeline::new("models/face_mesh.onnx", "models/face_detection.onnx").expect("Failed to load mesh")),
+fn create_pipeline(model_type: &str, config: &AppConfig) -> anyhow::Result<Box<dyn Pipeline>> {
+    // Helper to inject calibration
+    let get_cal = |name: &str| {
+        config.calibration.models.get(name).cloned().unwrap_or_default()
+    };
+    
+    match model_type {
+        "detection" => Ok(Box::new(inference::FaceDetectionPipeline::new(&config.models.face_detection_path).unwrap())),
+        "pose" => Ok(Box::new(head_pose::HeadPosePipeline::new(&config.models.head_pose_path, &config.models.face_detection_path).expect("Failed to load Pose"))),
+        "head_gaze" => Ok(Box::new(gaze::SimulatedGazePipeline::new(&config.models.face_mesh_path, &config.models.head_pose_path, &config.models.face_detection_path).expect("Failed to load Head Gaze"))),
+        "pupil_gaze" => Ok(Box::new(gaze::PupilGazePipeline::new(&config.models.face_mesh_path, &config.models.head_pose_path, &config.models.face_detection_path).expect("Failed to load Pupil Gaze"))),
+        "l2cs" => {
+            let mut p = gaze::L2CSPipeline::new(&config.models.l2cs_path, &config.models.face_mesh_path, &config.models.face_detection_path)?;
+            p.params = get_cal("l2cs");
+            Ok(Box::new(p))
+        },
+        "mobile" => {
+             let mut p = gaze::MobileGazePipeline::new(&config.models.mobile_path, &config.models.face_mesh_path, &config.models.face_detection_path)?;
+            p.params = get_cal("mobile");
+            Ok(Box::new(p))
+        },
+        "gaze" => Ok(Box::new(gaze::SimulatedGazePipeline::new(&config.models.face_mesh_path, &config.models.head_pose_path, &config.models.face_detection_path).expect("Failed to load Gaze"))), // Default alias
+        _ => Ok(Box::new(inference::FaceMeshPipeline::new(&config.models.face_mesh_path, &config.models.face_detection_path).expect("Failed to load mesh"))),
     }
 }
 
@@ -71,7 +87,7 @@ fn main() -> anyhow::Result<()> {
         }
     }
     
-    let mut pipeline = create_pipeline(available_models[active_model_index], &config);
+    let mut pipeline = create_pipeline(available_models[active_model_index], &config).unwrap();
     println!("Active Pipeline: {}", pipeline.name());
 
     // 3. Setup Output
@@ -307,7 +323,7 @@ fn main() -> anyhow::Result<()> {
                 minifb::Key::Key3 => show_gaze = !show_gaze,
                 minifb::Key::Key4 => {
                     active_model_index = (active_model_index + 1) % available_models.len();
-                    pipeline = create_pipeline(available_models[active_model_index], &config);
+                    pipeline = create_pipeline(available_models[active_model_index], &config).unwrap();
                     println!("Switched Pipeline to: {}", pipeline.name());
                 },
                 

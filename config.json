@@ -1,8 +1,8 @@
 {
   "defaults": {
-    "show_mesh": false,
+    "show_mesh": true,
     "show_pose": true,
-    "show_gaze": true,
+    "show_gaze": false,
     "mirror_mode": true,
     "show_overlay": true,
     "moondream_active": false,
@@ -10,13 +10,32 @@
   },
   "ui": {
     "menu_scale": 2,
-    "font_size_pt": 14,
+    "font_size_pt": 12,
     "font_family": "Monospace",
     "mesh_dot_size": 2,
     "mesh_color_hex": "#FF0000"
   },
   "models": {
     "l2cs_path": "models/l2cs_net.onnx",
-    "mobile_path": "models/mobile_gaze.onnx"
+    "mobile_path": "models/mobile_gaze.onnx",
+    "face_detection_path": "models/face_detection.onnx",
+    "face_mesh_path": "models/face_mesh.onnx",
+    "head_pose_path": "models/head_pose.onnx"
+  },
+  "calibration": {
+    "models": {
+      "l2cs": {
+        "yaw_offset": 0.11296778,
+        "pitch_offset": 0.00045747135,
+        "yaw_gain": -0.20175867,
+        "pitch_gain": -0.0019458437
+      },
+      "mobile": {
+        "yaw_offset": -0.01015409,
+        "pitch_offset": 0.00029231113,
+        "yaw_gain": -0.15837121,
+        "pitch_gain": -0.012533719
+      }
+    }
   }
 }

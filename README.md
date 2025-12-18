@@ -48,7 +48,33 @@ The overlay provides real-time feedback on tracking status:
 
 **Goal**: The Green and Cyan dots should be close to each other!
 
-## Key Features
+### Calibration
+
+To improve gaze accuracy for your specific setup, use the offline calibration tool:
+
+1.  **Collect Data**:
+    - Toggle **Calibration Mode** by pressing `[9]`.
+    - Move your mouse cursor to a target on the screen.
+    - Look at the cursor with both eyes.
+    - Press `[Space]` to capture the point.
+    - Repeat for 9-16 points covering the screen edges and center.
+2.  **Run Calibration**:
+
+    ```bash
+    cargo run --release --bin calibrate
+    ```
+
+    This will:
+
+    - Process all captured images.
+    - Optimize parameters for both models.
+    - Generate a report `calibration_report_{model}_{timestamp}.json`.
+    - Update `calibration_history.json`.
+    - Automatically select the best historical parameters and save them to `config.json`.
+
+3.  **Inspect Results**: Check the generated JSON reports for accuracy metrics (Mean Error, Precision).
+
+### Key Bindings
 
 - **Mirror Mode**: Toggle with `[5]`. Mirrors video and gaze direction.
 - **Calibration**: Toggle with `[9]`. Use Spacebar to capture points.
