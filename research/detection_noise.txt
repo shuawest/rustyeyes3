@@ -1,0 +1,24 @@
+
+# Where does the noise come from in the face and gaze detection? 
+
+The model (SVR) is a mathematical function. Like a calculator, if you type 5 + 5, it always gives 10. Calibration is static, so it feeds the exact same pixels every time.
+
+Live Noise comes from the Camera Hardware:
+
+Sensor Grain (ISO): Even in a still room, electrons dance on the sensor. A 'black' pixel might read value 10, then 11, then 9.
+Lighting Flicker: LED/Fluorescent lights flicker at 60Hz. To the eye it's steady; to a camera, shadows dance.
+Micro-movements: Your pulse moves your head ~1mm.
+Why the model jumps: If the SVR is Overfit (too "spiky"), it thinks that tiny change from '10' to '11' is a real eye movement, so it moves the cursor 50 pixels.
+
+The Fix (Monte Carlo): We force the training to see that noise. We take your static image and create 20 fake copies:
+"Image with grain"
+"Image slightly brighter"
+"Image slightly darker"
+
+Monte Carlo Simulation Implemented.
+
+I've updated calibrate.rs with the requested noise simulation:
+
+20x Expansion: Each of your 9 images is now turned into 20 data points (1 original + 19 with simulated ISO noise/jitter).
+Robust Learning: The SVR will now train on ~180 points, learning to ignore small pixel fluctuations.
+

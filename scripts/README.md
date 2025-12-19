@@ -1,4 +1,15 @@
-# Python Moondream2 Server Setup
+# Scripts Documentation
+
+This directory contains utilities for model management, data preparation, and the Python VLM server.
+
+## Script Index
+
+- `setup_models.sh`: Downloads required ONNX models (L2CS, FaceMesh, etc).
+- `prepare_dataset.py`: Processes `calibration_data/` into a dataset for custom model training.
+- `train_remote.py`: PyTorch training script for fine-tuning L2CS on a GPU server.
+- `moondream_server.py`: The VLM verification server.
+
+## Python Moondream2 Server Setup
 
 ## Installation
 

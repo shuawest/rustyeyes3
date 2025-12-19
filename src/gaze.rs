@@ -7,6 +7,18 @@ use crate::pipeline::Pipeline;
 use crate::inference::FaceMeshPipeline;
 use crate::head_pose::HeadPosePipeline;
 use crate::rectification::CalibrationParams;
+use smartcore::svm::svr::SVR;
+use smartcore::linalg::basic::matrix::DenseMatrix;
+use std::fs;
+
+// =========================================================================
+// Smoothing Helper (Exponential Moving Average)
+// =========================================================================
+// ... (Smoothing struct remains same, skipping for brevity in replacement if possible, but replace tool needs context)
+// Wait, I can't skip. Let's just do imports first.
+
+// Let's do imports separately.
+
 
 // =========================================================================
 // Smoothing Helper (Exponential Moving Average)
@@ -275,6 +287,9 @@ pub struct L2CSPipeline {
     mesh_pipeline: FaceMeshPipeline,
     smoothing: Smoothing,
     pub params: CalibrationParams,
+    // SVR Models (Optional)
+    svr_x: Option<SVR<'static, f64, DenseMatrix<f64>, Vec<f64>>>,
+    svr_y: Option<SVR<'static, f64, DenseMatrix<f64>, Vec<f64>>>,
 }
 
 impl L2CSPipeline {
@@ -295,12 +310,28 @@ impl L2CSPipeline {
             println!("[L2CS] Model not found at {}. Gaze will be disabled.", model_path);
             None
         };
+        
+        // Load SVR if exists
+        let load_svr = |path: &str| -> Option<SVR<'static, f64, DenseMatrix<f64>, Vec<f64>>> {
+            if Path::new(path).exists() {
+                println!("[L2CS] Loading SVR Calibration: {}", path);
+                if let Ok(bytes) = fs::read(path) {
+                    return bincode::deserialize(&bytes).ok();
+                }
+            }
+            None
+        };
+        
+        let svr_x = load_svr("svr_l2cs_x.model");
+        let svr_y = load_svr("svr_l2cs_y.model");
 
         Ok(Self {
             session,
             mesh_pipeline,
             smoothing: Smoothing::new(0.4),
             params: CalibrationParams::default(),
+            svr_x,
+            svr_y
         })
     }
     
@@ -409,45 +440,40 @@ impl Pipeline for L2CSPipeline {
              let outputs = model.run(ort::inputs![input])?;
              
              // 4. Extract Output
-             // L2CS typically outputs: [pitch_bins, yaw_bins]
-             // pitch_bins shape: [1, 90] (for 90 degrees)?
+             let output_count = outputs.len();
              
-             let (_, out0) = outputs[0].try_extract_tensor::<f32>()?;
-             let (_, out1) = outputs[1].try_extract_tensor::<f32>()?;
-             
-             // Heuristic to identify which is Yaw vs Pitch if unnamed
-             // Usually 0=Pitch, 1=Yaw or vice versa.
-             // Let's assume 0=Pitch, 1=Yaw and check ranges.
-             
-             let prob0 = Self::softmax(out0);
-             let prob1 = Self::softmax(out1);
-             
-             // Assume 90 bins, -90 to 90?
-             // Or 28 bins?
-             // Let's guess 90 bins, range -90..90, step 180/90 = 2? Or step 4?
-             // Original: 90 bins, corresponds to -90 to 90 degrees.
-             // Official L2CS implementation uses 4 degrees per bin: idx * 4 - 180
-             // range = 360, start = -180
-             let bins = out0.len(); 
-             let range = 360.0; // -180 to 180
-             let step = range / bins as f32; // step = 4.0
-             let start = -180.0;
-             
-             let val0 = Self::expectation(&prob0, start, step);
-             let val1 = Self::expectation(&prob1, start, step);
+             let (yaw_deg, pitch_deg) = if output_count == 1 {
+                 // Regression Model (Custom)
+                 // Expected shape: [1, 2] -> [yaw, pitch]
+                 let (_, out) = outputs[0].try_extract_tensor::<f32>()?;
+                 if out.len() == 2 {
+                     (out[0], out[1])
+                 } else {
+                     eprintln!("L2CS Single Output mode expects 2 values (Yaw, Pitch), got {}", out.len());
+                     return Ok(None);
+                 }
+             } else {
+                 // Classification Model (Original L2CS)
+                 // Expected: Output 0 and 1 are separate (Yaw/Pitch)
+                 let (_, out0) = outputs[0].try_extract_tensor::<f32>()?;
+                 let (_, out1) = outputs[1].try_extract_tensor::<f32>()?;
+                 
+                 let prob0 = Self::softmax(out0);
+                 let prob1 = Self::softmax(out1);
+                 
+                 let bins = out0.len(); 
+                 let range = 360.0; // -180 to 180
+                 let step = range / bins as f32; // step = 4.0
+                 let start = -180.0;
+                 
+                 let val0 = Self::expectation(&prob0, start, step);
+                 let val1 = Self::expectation(&prob1, start, step);
 
-             // Calculate indices for debug (0-90)
-             let pitch_idx = Self::expectation(&prob0, 0.0, 1.0);
-             let yaw_idx = Self::expectation(&prob1, 0.0, 1.0);
-             
-             // Assignment
-             // Usually Pitch is Y-axis (up/down), Yaw is X-axis (left/right)
-             // We'll update the Gaze output.
-             // Let's map 0->Pitch, 1->Yaw.
-             
-             // Swapped based on correlation analysis (out0 is Yaw, out1 is Pitch)
-             let yaw_deg = val0;
-             let pitch_deg = val1;
+                 // Mapping 0->Pitch, 1->Yaw? Based on earlier analysis, out0=Yaw, out1=Pitch was suspected
+                 // But logic below assigns val0->yaw, val1->pitch.
+                 (val0, val1)
+             };
+
                           // Polynomial Calibration
               // val = a*x^2 + b*x + c
               // x = raw degrees
@@ -456,11 +482,20 @@ impl Pipeline for L2CSPipeline {
               let y_raw = yaw_deg;
               let p_raw = pitch_deg;
               
-              // Note: Offset is now the constant term 'c', not a subtraction pre-gain.
-              let y_gained = self.params.yaw_curve * y_raw * y_raw + self.params.yaw_gain * y_raw + self.params.yaw_offset;
-              
-              // Invert pitch result to satisfy main.rs subtraction logic
-              let p_gained = -(self.params.pitch_curve * p_raw * p_raw + self.params.pitch_gain * p_raw + self.params.pitch_offset);
+              // SVR Inference (if models loaded)
+              let (y_gained, p_gained) = if let (Some(svr_x), Some(svr_y)) = (&self.svr_x, &self.svr_y) {
+                    let feat = DenseMatrix::from_2d_vec(&vec![vec![y_raw as f64, p_raw as f64]]);
+                    let px = svr_x.predict(&feat).unwrap_or(vec![0.0])[0] as f32;
+                    let py = svr_y.predict(&feat).unwrap_or(vec![0.0])[0] as f32;
+                    (px, py)
+              } else {
+                  // Fallback: Polynomial Calibration
+                  // Note: Offset is now the constant term 'c', not a subtraction pre-gain.
+                  let yg = self.params.yaw_curve * y_raw * y_raw + self.params.yaw_gain * y_raw + self.params.yaw_offset;
+                  // Invert pitch result to satisfy main.rs subtraction logic
+                  let pg = -(self.params.pitch_curve * p_raw * p_raw + self.params.pitch_gain * p_raw + self.params.pitch_offset);
+                  (yg, pg)
+              };
              
              // Apply Smoothing
              let (y_smooth, p_smooth) = self.smoothing.filter(y_gained, p_gained);

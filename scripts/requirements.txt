@@ -1,6 +1,5 @@
-torch>=2.0.0
-transformers>=4.40.0
-pillow>=10.0.0
-einops
-torchvision
-accelerate
+opencv-python
+mediapipe
+numpy
+pandas
+matplotlib

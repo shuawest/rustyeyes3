@@ -110,6 +110,109 @@ impl SimpleRng {
     }
 }
 
+// =========================================================================
+// SVR Training Logic (SmartCore)
+// =========================================================================
+
+use smartcore::svm::svr::{SVR, SVRParameters};
+use smartcore::svm::Kernels;
+use smartcore::linalg::basic::matrix::DenseMatrix;
+use std::io::Write;
+
+#[allow(dead_code)]
+fn train_svr_model(entries: &[DataPoint], model_name: &str) -> anyhow::Result<()> {
+    println!("Training SVR for {} ({} points)...", model_name, entries.len());
+    
+    // X features: [yaw, pitch]
+    // Y targets: [screen_x, screen_y]
+    // SVR is single-target, so we need two models: SVR_X and SVR_Y.
+    
+    let x_data: Vec<Vec<f64>> = entries.iter().map(|e| vec![e.raw_yaw as f64, e.raw_pitch as f64]).collect();
+    let y_x_data: Vec<f64> = entries.iter().map(|e| e.target_x as f64).collect();
+    let y_y_data: Vec<f64> = entries.iter().map(|e| e.target_y as f64).collect();
+    
+    let x_matrix = DenseMatrix::from_2d_vec(&x_data);
+    
+    // RBF Kernel is best for non-linear gaze mapping
+    // RBF Kernel is best for non-linear gaze mapping
+    // Note: Gamma is set via with_gamma if needed, but 0.3.2 might not have it exposed directly on params?
+    // Checking docs indirectly: Kernels::rbf() is unit struct or enum variant.
+    // Grid Search for Best Parameters
+    // We have small data (N < 20 often), so we need to avoid overfitting but also actually fit the data.
+    // Inputs are degrees (10-40 range). Distance^2 can be 100-400.
+    // Gamma logic: exp(-gamma * dist^2).
+    // If Gamma=0.7, exp(-280) = 0. Too spiky.
+    // If Gamma=0.01, exp(-4) = 0.01. Better.
+    
+    let c_candidates = vec![10.0, 100.0, 500.0, 1000.0];
+    let gamma_candidates = vec![0.001, 0.005, 0.01, 0.05, 0.1];
+    let eps_candidates = vec![0.1, 1.0, 5.0];
+
+    // Helper to evaluate parameters
+    let train_and_eval = |x: &DenseMatrix<f64>, y: &Vec<f64>, c: f64, g: f64, eps: f64| -> f64 {
+         let p = SVRParameters::default().with_kernel(Kernels::rbf().with_gamma(g)).with_c(c).with_eps(eps);
+         if let Ok(model) = SVR::fit(x, y, &p) {
+             // Calc MSE on training data (LOOCV would be better but simple fit first)
+             let preds = model.predict(x).unwrap();
+             let mse: f64 = y.iter().zip(preds.iter()).map(|(t, p)| (t - p).powi(2)).sum::<f64>() / y.len() as f64;
+             mse
+         } else {
+             f64::MAX
+         }
+    };
+
+    // Find Best X Params
+    let mut best_x_params = (100.0, 0.01, 0.1);
+    let mut min_mse_x = f64::MAX;
+    for &c in &c_candidates {
+        for &g in &gamma_candidates {
+            for &e in &eps_candidates {
+                let mse = train_and_eval(&x_matrix, &y_x_data, c, g, e);
+                if mse < min_mse_x { min_mse_x = mse; best_x_params = (c, g, e); }
+            }
+        }
+    }
+    println!("  Best X Params: C={}, Gamma={}, Eps={} (MSE={:.2})", best_x_params.0, best_x_params.1, best_x_params.2, min_mse_x);
+
+    // Find Best Y Params
+    let mut best_y_params = (100.0, 0.01, 0.1);
+    let mut min_mse_y = f64::MAX;
+    for &c in &c_candidates {
+        for &g in &gamma_candidates {
+             for &e in &eps_candidates {
+                let mse = train_and_eval(&x_matrix, &y_y_data, c, g, e);
+                if mse < min_mse_y { min_mse_y = mse; best_y_params = (c, g, e); }
+            }
+        }
+    }
+    println!("  Best Y Params: C={}, Gamma={}, Eps={} (MSE={:.2})", best_y_params.0, best_y_params.1, best_y_params.2, min_mse_y);
+
+    // Train Final Models
+    let params_x = SVRParameters::default().with_kernel(Kernels::rbf().with_gamma(best_x_params.1)).with_c(best_x_params.0).with_eps(best_x_params.2);
+    let svr_x = SVR::fit(&x_matrix, &y_x_data, &params_x)
+        .map_err(|e| anyhow::anyhow!("SVR X Training failed: {}", e))?;
+        
+    let params_y = SVRParameters::default().with_kernel(Kernels::rbf().with_gamma(best_y_params.1)).with_c(best_y_params.0).with_eps(best_y_params.2);
+    let svr_y = SVR::fit(&x_matrix, &y_y_data, &params_y)
+        .map_err(|e| anyhow::anyhow!("SVR Y Training failed: {}", e))?;
+        
+    // Serialize
+    // We save as bincode or JSON? SmartCore supports bincode via serde.
+    let path_x = format!("svr_{}_x.model", model_name);
+    let path_y = format!("svr_{}_y.model", model_name);
+    
+    let bytes_x = bincode::serialize(&svr_x)?;
+    let bytes_y = bincode::serialize(&svr_y)?;
+    
+    fs::write(&path_x, bytes_x)?;
+    fs::write(&path_y, bytes_y)?;
+    
+    println!("  Saved SVR models to {} and {}", path_x, path_y);
+    
+    Ok(())
+}
+
+
 fn optimize_params(entries: &[DataPoint], base_model: &str) -> (CalibrationParams, CalibrationMetrics) {
     println!("Optimizing {} using Analytic Least Squares...", base_model);
     
@@ -524,6 +627,32 @@ fn evaluate_and_report(
 // Main
 // =========================================================================
 
+// Helper for random numbers
+use rand::Rng;
+
+fn augment_image(img: &DynamicImage) -> DynamicImage {
+    let mut rng = rand::thread_rng();
+    let mut buffer = img.to_rgb8();
+    
+    // 1. Brightness Jitter (+/- 30)
+    let brightness_offset: i16 = rng.gen_range(-30..30);
+    
+    // 2. Gaussian Noise (Approx via Uniform)
+    // Sensor noise is typically small, +/- 10 values
+    
+    for pixel in buffer.pixels_mut() {
+        let r = pixel[0] as i16 + brightness_offset + rng.gen_range(-10..10);
+        let g = pixel[1] as i16 + brightness_offset + rng.gen_range(-10..10);
+        let b = pixel[2] as i16 + brightness_offset + rng.gen_range(-10..10);
+        
+        pixel[0] = r.clamp(0, 255) as u8;
+        pixel[1] = g.clamp(0, 255) as u8;
+        pixel[2] = b.clamp(0, 255) as u8;
+    }
+    
+    DynamicImage::ImageRgb8(buffer)
+}
+
 fn main() -> anyhow::Result<()> {
     let mut config = AppConfig::load()?;
     let data_dir = Path::new("calibration_data");
@@ -592,18 +721,29 @@ fn main() -> anyhow::Result<()> {
             let json_str = fs::read_to_string(json_path)?;
             let meta: JsonMeta = serde_json::from_str(&json_str)?;
             let original_img = ImageReader::open(img_path)?.with_guessed_format()?.decode()?.to_rgb8();
+            let original_dynamic = DynamicImage::ImageRgb8(original_img);
             
-            // Single Pass (Deterministic)
-            if let Ok(Some(output)) = l2cs.process_raw_values(&original_img) {
-                 if let rusty_eyes::types::PipelineOutput::Gaze { yaw, pitch, .. } = output {
-                     dataset_l2cs.push(DataPoint {
-                         filename: img_path.file_name().unwrap().to_string_lossy().to_string(),
-                         raw_yaw: yaw, 
-                         raw_pitch: -pitch, 
-                         target_x: meta.screen_x,
-                         target_y: meta.screen_y,
-                     });
-                 }
+            // Monte Carlo: 20 Iterations
+            for i in 0..20 {
+                let img_to_process = if i == 0 {
+                    original_dynamic.clone()
+                } else {
+                    augment_image(&original_dynamic)
+                };
+                
+                let img_rgb = img_to_process.to_rgb8();
+            
+                if let Ok(Some(output)) = l2cs.process_raw_values(&img_rgb) {
+                     if let rusty_eyes::types::PipelineOutput::Gaze { yaw, pitch, .. } = output {
+                         dataset_l2cs.push(DataPoint {
+                             filename: img_path.file_name().unwrap().to_string_lossy().to_string(),
+                             raw_yaw: yaw, 
+                             raw_pitch: pitch, 
+                             target_x: meta.screen_x,
+                             target_y: meta.screen_y,
+                         });
+                     }
+                }
             }
             print!(".");
             use std::io::Write;
@@ -630,20 +770,32 @@ fn main() -> anyhow::Result<()> {
             let json_str = fs::read_to_string(json_path)?;
             let meta: JsonMeta = serde_json::from_str(&json_str)?;
             let original_img = ImageReader::open(img_path)?.with_guessed_format()?.decode()?.to_rgb8();
+            let original_dynamic = DynamicImage::ImageRgb8(original_img);
             
-            if let Ok(Some(output)) = mobile.process_raw_values(&original_img) {
-                 if let rusty_eyes::types::PipelineOutput::Gaze { yaw, pitch, .. } = output {
-                     // Mobile raw output needs internal inversion? 
-                     // Recent fix in gaze.rs inverted it. 
-                     // Assuming process_raw_values returns the standardized values.
-                     dataset_mobile.push(DataPoint {
-                         filename: img_path.file_name().unwrap().to_string_lossy().to_string(),
-                         raw_yaw: yaw, 
-                         raw_pitch: -pitch, 
-                         target_x: meta.screen_x,
-                         target_y: meta.screen_y,
-                     });
-                 }
+            // Monte Carlo: 20 Iterations
+            // 1 Original + 19 Augmented
+            for i in 0..20 {
+                let img_to_process = if i == 0 {
+                    original_dynamic.clone()
+                } else {
+                    augment_image(&original_dynamic)
+                };
+                
+                let img_rgb = img_to_process.to_rgb8();
+            
+                if let Ok(Some(output)) = mobile.process_raw_values(&img_rgb) {
+                     if let rusty_eyes::types::PipelineOutput::Gaze { yaw, pitch, .. } = output {
+                         // Mobile raw output needs internal inversion? 
+                         // Recent fix in gaze.rs inverted it. 
+                         dataset_mobile.push(DataPoint {
+                             filename: img_path.file_name().unwrap().to_string_lossy().to_string(),
+                             raw_yaw: yaw, 
+                             raw_pitch: pitch, 
+                             target_x: meta.screen_x,
+                             target_y: meta.screen_y,
+                         });
+                     }
+                }
             }
             print!(".");
             use std::io::Write;
@@ -663,6 +815,11 @@ fn main() -> anyhow::Result<()> {
         
         println!("Optimizing {}...", name);
         let (mut params, _opt_metrics) = optimize_params(dataset, name);
+        
+        // Train SVR (Side-effect: saves .model files)
+        if let Err(e) = train_svr_model(dataset, name) {
+            eprintln!("Warning: Failed to train SVR for {}: {}", name, e);
+        }
         
         // STRATEGIC BOOST: Detect Head Turn and Boost Sensitivity for Eye Comfort
         if name == "l2cs" {

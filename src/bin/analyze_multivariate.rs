@@ -24,7 +24,12 @@ fn main() -> anyhow::Result<()> {
     )?;
     // Identity params
     l2cs.params = CalibrationParams {
-        yaw_offset: 0.0, pitch_offset: 0.0, yaw_gain: 1.0, pitch_gain: 1.0,
+        yaw_offset: 0.0,
+        pitch_offset: 0.0,
+        yaw_gain: 1.0,
+        pitch_gain: 1.0,
+        yaw_curve: 0.0,
+        pitch_curve: 0.0,
     };
     
     let mut recs = Vec::new();

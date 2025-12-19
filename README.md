@@ -81,6 +81,30 @@ To improve gaze accuracy for your specific setup, use the offline calibration to
 - **Moondream**: Toggle with `[7]`. Periodically validates gaze against a VLM.
 - **HUD**: Toggle with `[0]`. Shows FPS, Yaw/Pitch, and status.
 
+## Custom Model Training (Advanced)
+
+To achieve higher accuracy than the standard L2CS model, you can fine-tune a model on your specific calibration data.
+
+1.  **Prepare Data (Local)**:
+
+    ```bash
+    pip3 install -r scripts/requirements.txt
+    python3 scripts/prepare_dataset.py
+    ```
+
+    This generates `dataset_clean/` with augmented training images derived from your `calibration_data`.
+
+2.  **Train (Remote/DGX)**:
+    Upload the `dataset_clean/` folder and `scripts/train_remote.py` to your GPU server.
+
+    ```bash
+    python3 train_remote.py --data_dir dataset_clean --output custom_gaze.onnx
+    ```
+
+3.  **Deploy**:
+    Copy the resulting `custom_gaze.onnx` file to the `models/` directory.
+    The application will automatically detect the regression model and switch to it.
+
 ## Dev Notes
 
 - Edit `config.json` for camera settings.
