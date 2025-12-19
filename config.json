@@ -24,21 +24,21 @@
   },
   "calibration": {
     "models": {
-      "l2cs": {
-        "yaw_offset": 50.295017,
-        "pitch_offset": -21.262043,
-        "yaw_gain": 1.1337425,
-        "pitch_gain": -7.456155,
-        "yaw_curve": -0.12183861,
-        "pitch_curve": -0.27516004
-      },
       "mobile": {
-        "yaw_offset": 48.176357,
+        "yaw_offset": 55.0,
         "pitch_offset": -367.5888,
-        "yaw_gain": -1.8839481,
+        "yaw_gain": -2.5,
         "pitch_gain": -102.01487,
         "yaw_curve": -0.25596017,
         "pitch_curve": -5.8269734
+      },
+      "l2cs": {
+        "yaw_offset": 55.0,
+        "pitch_offset": -21.262043,
+        "yaw_gain": -2.5,
+        "pitch_gain": -7.456155,
+        "yaw_curve": -0.12183861,
+        "pitch_curve": -0.27516004
       }
     }
   }

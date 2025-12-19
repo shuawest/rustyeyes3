@@ -1,102 +1,106 @@
-use std::fs;
-use std::path::Path;
+use std::error::Error;
+use std::fs::File;
+use std::io::BufReader;
 use serde::Deserialize;
 
-#[derive(Deserialize, Debug)]
-struct Report {
-    entries: Vec<Entry>,
-}
-
-#[derive(Deserialize, Debug)]
-struct Entry {
-    target_x: f32,
-    target_y: f32,
+#[derive(Debug, Deserialize)]
+struct DataPoint {
     raw_yaw: f32,
+    #[allow(dead_code)]
     raw_pitch: f32,
+    target_x: f32,
+    #[allow(dead_code)]
+    target_y: f32,
 }
 
-fn main() -> anyhow::Result<()> {
-    let reports_dir = Path::new("calibration_data/reports");
-    if !reports_dir.exists() {
-        println!("No reports found.");
+#[derive(Debug, Deserialize)]
+struct Report {
+    entries: Vec<DataPoint>,
+    model: String,
+}
+
+fn main() -> Result<(), Box<dyn Error>> {
+    let args: Vec<String> = std::env::args().collect();
+    if args.len() < 2 {
+        eprintln!("Usage: analyze_calibration <report_json>");
         return Ok(());
     }
 
-    for entry in fs::read_dir(reports_dir)? {
-        let entry = entry?;
-        let path = entry.path();
-        if path.extension().map_or(false, |e| e == "json") && path.file_name().unwrap().to_string_lossy().contains("report_l2cs") {
-            println!("Analyzing {:?}", path);
-            let content = fs::read_to_string(&path)?;
-            let report: Report = serde_json::from_str(&content)?;
-            analyze(&report.entries);
-        }
+    let file = File::open(&args[1])?;
+    let reader = BufReader::new(file);
+    let report: Report = serde_json::from_reader(reader)?;
+
+    println!("Analyzing Report for model: {}", report.model);
+    println!("Entries: {}", report.entries.len());
+
+    // 1. Determine Screen Geometry (approx)
+    let min_x = report.entries.iter().map(|e| e.target_x).fold(f32::INFINITY, f32::min);
+    let max_x = report.entries.iter().map(|e| e.target_x).fold(f32::NEG_INFINITY, f32::max);
+    
+    // Assume padding, let's say screen is 0..1728 (Macbook Air?) or 1920?
+    // Let's deduce width from max_x. 
+    let width = if max_x > 1800.0 { 1920.0 } else { 1728.0 }; // Heuristic
+    let center_x = width / 2.0;
+    
+    // 2. Map Pixels -> Degrees
+    // Assumption: Screen spans approx 53 degrees width (Macbook at normal distance)
+    // +/- 26.5 deg from center.
+    let fov_width_deg = 53.0;
+    let deg_per_pixel = fov_width_deg / width;
+    
+    println!("Geometry: Width={:.0}, Center={:.0}, deg/px={:.4}", width, center_x, deg_per_pixel);
+
+    let mut x_data = Vec::new(); // raw_yaw
+    let mut y_data = Vec::new(); // target_angle
+
+    for e in &report.entries {
+        // Convert Target X to Target Angle
+        // (x - center) * scale
+        // NOTE: Screen X grows Right. Head Yaw grows Left (positive).
+        // Standard convention: 
+        // Screen Right (+X) corresponds to Head Right (-Yaw, usually).
+        // But main.rs: "Mirror Mode: -yaw".
+        // Let's stick to: Target Angle should follow Head Angle convention.
+        // If Head Left = +Yaw.
+        // Then Target Left (x < center) should be +Angle.
+        
+        let delta_x = e.target_x - center_x;
+        // if x < center (Left), delta is negative. 
+        // We want Positive Angle for Left.
+        let target_angle = -delta_x * deg_per_pixel;
+        
+        x_data.push(e.raw_yaw as f64);
+        y_data.push(target_angle as f64);
     }
+
+    // 3. Linear Regression (Least Squares)
+    // y = mx + c
+    // target_angle = gain * raw_yaw + offset
+    
+    let n = x_data.len() as f64;
+    let sum_x: f64 = x_data.iter().sum();
+    let sum_y: f64 = y_data.iter().sum();
+    let sum_xy: f64 = x_data.iter().zip(&y_data).map(|(x, y)| x * y).sum();
+    let sum_x2: f64 = x_data.iter().map(|x| x * x).sum();
+
+    let gain = (n * sum_xy - sum_x * sum_y) / (n * sum_x2 - sum_x * sum_x);
+    let offset = (sum_y - gain * sum_x) / n;
+
+    println!("--------------------------------------------------");
+    println!("Proposed Calibration (Angle Space):");
+    println!("yaw_gain: {:.6}", gain);
+    println!("yaw_offset: {:.6}", offset);
+    println!("--------------------------------------------------");
+
+    // Validation
+    let mut total_error = 0.0;
+    for (raw, target) in x_data.iter().zip(&y_data) {
+        let predicted = raw * gain + offset;
+        let error = (predicted - target).abs();
+        total_error += error;
+        // println!("Raw: {:.2} -> Pred: {:.2} (Tgt: {:.2}) Err: {:.2}", raw, predicted, target, error);
+    }
+    println!("Mean Angular Error: {:.2} degrees", total_error / n);
+
     Ok(())
-}
-
-fn analyze(entries: &[Entry]) {
-    let n = entries.len() as f32;
-    
-    // Correlation X vs Yaw
-    let mean_x = entries.iter().map(|e| e.target_x).sum::<f32>() / n;
-    let mean_yaw = entries.iter().map(|e| e.raw_yaw).sum::<f32>() / n;
-    
-    let mut num_x = 0.0;
-    let mut den_x1 = 0.0;
-    let mut den_x2 = 0.0;
-    
-    for e in entries {
-        let dx = e.target_x - mean_x;
-        let dy = e.raw_yaw - mean_yaw;
-        num_x += dx * dy;
-        den_x1 += dx * dx;
-        den_x2 += dy * dy;
-    }
-    let r_x = num_x / (den_x1.sqrt() * den_x2.sqrt());
-    
-    // Correlation Y vs Pitch
-    let mean_y = entries.iter().map(|e| e.target_y).sum::<f32>() / n;
-    let mean_pitch = entries.iter().map(|e| e.raw_pitch).sum::<f32>() / n;
-    
-    let mut num_y = 0.0;
-    let mut den_y1 = 0.0;
-    let mut den_y2 = 0.0;
-    
-    for e in entries {
-        let dy_target = e.target_y - mean_y;
-        let dy_pitch = e.raw_pitch - mean_pitch;
-        num_y += dy_target * dy_pitch;
-        den_y1 += dy_target * dy_target;
-        den_y2 += dy_pitch * dy_pitch;
-    }
-    let r_y = num_y / (den_y1.sqrt() * den_y2.sqrt());
-    
-    println!("Correlation TargetX vs RawYaw: {:.4}", r_x);
-    println!("Correlation TargetY vs RawPitch: {:.4}", r_y);
-    
-    if r_x.abs() < 0.5 { println!("Warning: Weak X correlation. Data may be noisy or axes unrelated."); }
-    if r_y.abs() < 0.5 { println!("Warning: Weak Y correlation."); }
-    
-    // Simple 1D Linear Regression to find slope (Gain)
-    // x = a + b * yaw -> b = r * (std_x / std_yaw)
-    let std_x = (den_x1 / n).sqrt();
-    let std_yaw = (den_x2 / n).sqrt();
-    let slope_x = r_x * (std_x / std_yaw);
-    
-    let std_y = (den_y1 / n).sqrt();
-    let std_pitch = (den_y2 / n).sqrt();
-    let slope_y = r_y * (std_y / std_pitch);
-    
-    println!("Estimated Gain X (px/deg): {:.2}", slope_x);
-    println!("Estimated Gain Y (px/deg): {:.2}", slope_y);
-    
-    println!("--- Range Analysis ---");
-    let min_yaw = entries.iter().map(|e| e.raw_yaw).fold(f32::INFINITY, f32::min);
-    let max_yaw = entries.iter().map(|e| e.raw_yaw).fold(f32::NEG_INFINITY, f32::max);
-    println!("Yaw Range: [{:.2}, {:.2}] (Delta: {:.2})", min_yaw, max_yaw, max_yaw - min_yaw);
-
-    let min_pitch = entries.iter().map(|e| e.raw_pitch).fold(f32::INFINITY, f32::min);
-    let max_pitch = entries.iter().map(|e| e.raw_pitch).fold(f32::NEG_INFINITY, f32::max);
-    println!("Pitch Range: [{:.2}, {:.2}] (Delta: {:.2})", min_pitch, max_pitch, max_pitch - min_pitch);
 }
