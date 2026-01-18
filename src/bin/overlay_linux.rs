@@ -86,12 +86,25 @@ impl AppState {
             // 1. Clear to Transparent (0x00000000)
             buffer.fill(0);
 
-            // DEBUG: Draw a faint grid pattern to verify overlay is rendering
-            for i in (0..height).step_by(100) {
-                for j in (0..width).step_by(100) {
-                    let idx = i as usize * width as usize + j as usize;
+            // Grid: Draw thin grey lines every 100px
+            let grid_color = 0x00808080; // Grey (0RGB format)
+            
+            // Vertical lines
+            for x in (0..width).step_by(100) {
+                for y in 0..height {
+                    let idx = y as usize * width as usize + x as usize;
                     if idx < buffer.len() {
-                        buffer[idx] = 0x00FF0000; // Red (0RGB format: 0x00|RR|GG|BB)
+                        buffer[idx] = grid_color;
+                    }
+                }
+            }
+            
+            // Horizontal lines
+            for y in (0..height).step_by(100) {
+                for x in 0..width {
+                    let idx = y as usize * width as usize + x as usize;
+                    if idx < buffer.len() {
+                        buffer[idx] = grid_color;
                     }
                 }
             }
@@ -205,12 +218,17 @@ impl ApplicationHandler<UserEvent> for App {
 
         #[cfg(target_os = "linux")]
         let win_attr = {
+            // Try to get primary monitor size, fallback to large default
+            let monitor_size = event_loop.primary_monitor()
+                .map(|m| m.size())
+                .unwrap_or_else(|| winit::dpi::PhysicalSize::new(1920, 1080));
+            
             WindowAttributes::default()
                 .with_title("Rusty Eyes Overlay")
                 .with_transparent(true)
                 .with_decorations(false)
                 .with_window_level(WindowLevel::AlwaysOnTop)
-                .with_inner_size(LogicalSize::new(1440.0, 900.0))
+                .with_inner_size(monitor_size) // Match screen size
                 // X11-specific: Prevent window from accepting input focus
                 .with_override_redirect(true)
         };
