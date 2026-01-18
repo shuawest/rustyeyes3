@@ -419,7 +419,18 @@ fn main() -> anyhow::Result<()> {
                   last_remote_ts = std::time::Instant::now();
                   
                   // Convert RemoteResult to PipelineOutput
-                  if let Some(mesh) = res.face_mesh {
+                  if let Some(mut mesh) = res.face_mesh {
+                       // CRITICAL FIX: MediaPipe Remote returns NORMALIZED [0,1] coordinates.
+                       // We must scale them to the image dimensions (Pixels) to match local pipeline behavior.
+                       let img_w = latest_realtime_frame.width() as f32;
+                       let img_h = latest_realtime_frame.height() as f32;
+                       
+                       for p in &mut mesh.points {
+                           p.x *= img_w;
+                           p.y *= img_h;
+                           // p.z is relative, usually keep as is or scale by width? Keep as is for now.
+                       }
+                  
                        // Log Mesh Summary
                        let msg = format!("[REMOTE] Received FaceMesh: {} points. Gaze: {:?}", mesh.points.len(), res.gaze);
                        log::info!("{}", msg);
