@@ -2,7 +2,7 @@
 
 # Configuration
 BINARY="./target/release/rusty-eyes"
-ARGS="--config config.toml --remote-dgx-url http://jowestdgxe:50051"
+ARGS="--remote-dgx http://jowestdgxe:50051"
 LOG_FILE="client.log"
 PID_FILE=".client.pid"
 
