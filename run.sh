@@ -12,6 +12,11 @@ fi
 
 if [ "$OS_TYPE" = "Linux" ]; then
     echo "[SETUP] Linux detected. Building Overlay..."
+    
+    # Set RUSTFLAGS to avoid linker issues on older systems (Ubuntu 18.04)
+    # The --gc-sections flag with newer metadata causes issues with binutils 2.30
+    export RUSTFLAGS="-C link-arg=-Wl,--no-eh-frame-hdr"
+    
     cargo build --release --bin overlay_linux
     
     # Symlink or Copy to ./overlay_app (what main.rs expects)
