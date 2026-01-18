@@ -25,6 +25,14 @@ python3 server.py
 # REST listening on :8080
 ```
 
+### Firewall Configuration (Server)
+Ensure the following ports are open on the firewall (e.g., using `ufw`):
+
+```bash
+sudo ufw allow 50051/tcp  # gRPC (Streaming + Health)
+sudo ufw allow 8080/tcp   # REST API (Health + Metadata)
+```
+
 ## Deployment
 Use the included `deploy.sh` script to deploy to a remote host (e.g., DGX):
 
