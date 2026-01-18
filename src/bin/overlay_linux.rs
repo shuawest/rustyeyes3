@@ -251,10 +251,11 @@ impl ApplicationHandler<UserEvent> for App {
                         
                         // Create an empty input region to make window fully transparent to input
                         let region = x11::xfixes::XFixesCreateRegion(display, std::ptr::null_mut(), 0);
+                        // ShapeInput = 2 (from X11 Shape extension constants)
                         x11::xfixes::XFixesSetWindowShapeRegion(
                             display,
                             window_id,
-                            x11::xfixes::ShapeInput as i32,
+                            2, // ShapeInput
                             0,
                             0,
                             region,
