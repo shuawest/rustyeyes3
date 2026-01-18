@@ -119,5 +119,5 @@ To achieve higher accuracy than the standard L2CS model, you can fine-tune a mod
 ## Dev Notes
 
 - Edit `config.json` for camera settings.
-- See `specs/` for architectural details.
+- See `specs/` for architectural details, including [Distributed Gaze](specs/distributed_gaze.md).
 - Logs: `cargo run` prints standard logs. Enable debug logging in `main.rs` for IPC traces.
