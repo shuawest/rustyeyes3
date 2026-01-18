@@ -86,6 +86,16 @@ impl AppState {
             // 1. Clear to Transparent (0x00000000)
             buffer.fill(0);
 
+            // DEBUG: Draw a faint grid pattern to verify overlay is rendering
+            for i in (0..height).step_by(100) {
+                for j in (0..width).step_by(100) {
+                    let idx = i as usize * width as usize + j as usize;
+                    if idx < buffer.len() {
+                        buffer[idx] = 0x20FF0000; // Faint red dots
+                    }
+                }
+            }
+
             // Helper to draw circle
             let mut draw_circle = |cx: f32, cy: f32, r: f32, color: u32| {
                 let r_sq = r * r;
@@ -107,17 +117,6 @@ impl AppState {
                      }
                 }
             };
-
-            // DEBUG: Draw a faint grid pattern to verify overlay is rendering
-            // This can be removed later or toggled
-            for i in (0..height).step_by(100) {
-                for j in (0..width).step_by(100) {
-                    let idx = i as usize * width as usize + j as usize;
-                    if idx < buffer.len() {
-                        buffer[idx] = 0x20FF0000; // Faint red dots
-                    }
-                }
-            }
 
             // 2. Draw Gaze (Blue Dot)
             if let Some((gx, gy)) = self.gaze_pos {
