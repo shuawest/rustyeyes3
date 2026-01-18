@@ -1,0 +1,50 @@
+# DeepStream Face Mesh Application Configuration
+# config_face_mesh.txt
+
+[application]
+enable-perf-measurement=1
+perf-measurement-interval-sec=5
+
+[tiled-display]
+enable=0
+
+[source0]
+enable=1
+type=4  # 4=RTP/UDP
+uri=udp://0.0.0.0:5004
+num-sources=1
+gpu-id=0
+# cudadec-memtype=0
+
+[streammux]
+gpu-id=0
+batch-size=1
+batched-push-timeout=40000
+width=1280
+height=720
+enable-padding=0
+nvbuf-memory-type=0
+
+[primary-gie]
+enable=1
+gpu-id=0
+## For now, using a pre-trained face detection model
+## We'll replace this with GazeNet/FaceMesh once configured
+model-engine-file=model_b1_gpu0_fp32.engine
+labelfile-path=labels.txt
+batch-size=1
+interval=0
+gie-unique-id=1
+nvbuf-memory-type=0
+config-file-path=config_infer_primary_facedetect.txt
+
+[sink0]
+enable=1
+type=2  # 2=EGL display (for visual verification)
+sync=0
+gpu-id=0
+nvbuf-memory-type=0
+
+[sink1]
+enable=1
+type=3  # 3=Fake sink (metadata only)
