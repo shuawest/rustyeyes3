@@ -11,6 +11,9 @@ use std::io::{self, BufRead};
 use std::num::NonZeroU32;
 use rusttype::{Font, Scale, Point, PositionedGlyph};
 
+#[cfg(target_os = "linux")]
+use winit::platform::x11::WindowAttributesExtX11;
+
 // Custom Events from blocking stdin thread
 #[derive(Debug)]
 enum UserEvent {
@@ -105,6 +108,17 @@ impl AppState {
                 }
             };
 
+            // DEBUG: Draw a faint grid pattern to verify overlay is rendering
+            // This can be removed later or toggled
+            for i in (0..height).step_by(100) {
+                for j in (0..width).step_by(100) {
+                    let idx = i as usize * width as usize + j as usize;
+                    if idx < buffer.len() {
+                        buffer[idx] = 0x20FF0000; // Faint red dots
+                    }
+                }
+            }
+
             // 2. Draw Gaze (Blue Dot)
             if let Some((gx, gy)) = self.gaze_pos {
                 // Blue: 0x0000FFFF (Alpha, Red, Green, Blue)? No softbuffer is usually XRGB or ARGB.
@@ -193,31 +207,31 @@ impl ApplicationHandler<UserEvent> for App {
             return;
         }
 
-        let win_attr = WindowAttributes::default()
-            .with_title("Rusty Eyes Overlay")
-            .with_transparent(true)
-            .with_decorations(false)
-            .with_window_level(WindowLevel::AlwaysOnTop)
-            .with_fullscreen(None) // We want maximized or custom size?
-            // On X11, transparent often requires a compositor.
-            // We'll set maximized to cover screen? 
-            // Or just very large?
-            // Let's use 1920x1080 default or what was passed?
-            // The protocol doesn't send size on init easily, main passes args?
-            // main uses OverlayWindow::new(screen_w, screen_h).
-            // But we are a binary. We can take args?
-            .with_inner_size(LogicalSize::new(1440.0, 900.0)); // Default fallback
-
-        // Note: passthrough (click-through) is platform specific.
-        // winit 0.29+ has `.with_cursor_hittest(false)`?
-        // Checked docs: yes, `with_cursor_passthrough` or similar depending on platform traits.
-        // But winit::window::WindowAttributes doesn't have it directly universal?
-        // It's in `WindowBuilderExtX11`?
+        #[cfg(target_os = "linux")]
+        let win_attr = {
+            WindowAttributes::default()
+                .with_title("Rusty Eyes Overlay")
+                .with_transparent(true)
+                .with_decorations(false)
+                .with_window_level(WindowLevel::AlwaysOnTop)
+                .with_inner_size(LogicalSize::new(1440.0, 900.0))
+                // X11-specific: Prevent window from accepting input focus
+                .with_override_redirect(true)
+        };
+        
+        #[cfg(not(target_os = "linux"))]
+        let win_attr = {
+            WindowAttributes::default()
+                .with_title("Rusty Eyes Overlay")
+                .with_transparent(true)
+                .with_decorations(false)
+                .with_window_level(WindowLevel::AlwaysOnTop)
+                .with_inner_size(LogicalSize::new(1440.0, 900.0))
+        };
         
         let window = event_loop.create_window(win_attr).unwrap();
         
-        // Window is created. Try to set passthrough.
-        // window.set_cursor_hittest(false); // New api
+        // Set cursor passthrough for click-through behavior
         let _ = window.set_cursor_hittest(false);
         // let _ = window.set_ignore_cursor_events(true); // Deprecated/Removed in 0.30
         
