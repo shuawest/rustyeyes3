@@ -3,12 +3,16 @@ use clap::Parser;
 // Use modules from the library
 use rusty_eyes::args;
 use rusty_eyes::camera;
+#[cfg(feature = "onnx")]
 use rusty_eyes::inference;
 use rusty_eyes::output;
 use rusty_eyes::types;
+#[cfg(feature = "onnx")]
 use rusty_eyes::detector;
 use rusty_eyes::pipeline;
+#[cfg(feature = "onnx")]
 use rusty_eyes::head_pose;
+#[cfg(feature = "onnx")]
 use rusty_eyes::gaze;
 use rusty_eyes::overlay;
 use rusty_eyes::moondream;
@@ -29,6 +33,7 @@ use calibration::CalibrationManager;
 use config::AppConfig;
 use ttf::FontRenderer;
 
+#[cfg(feature = "onnx")]
 fn create_pipeline(model_type: &str, config: &AppConfig) -> anyhow::Result<Box<dyn Pipeline>> {
     // Helper to inject calibration
     let get_cal = |name: &str| {
@@ -53,6 +58,14 @@ fn create_pipeline(model_type: &str, config: &AppConfig) -> anyhow::Result<Box<d
         "gaze" => Ok(Box::new(gaze::SimulatedGazePipeline::new(&config.models.face_mesh_path, &config.models.head_pose_path, &config.models.face_detection_path).expect("Failed to load Gaze"))), // Default alias
         _ => Ok(Box::new(inference::FaceMeshPipeline::new(&config.models.face_mesh_path, &config.models.face_detection_path).expect("Failed to load mesh"))),
     }
+}
+
+#[cfg(not(feature = "onnx"))]
+fn create_pipeline(_model_type: &str, _config: &AppConfig) -> anyhow::Result<Box<dyn Pipeline>> {
+    // Dummy pipeline when ONNX is not available
+    use rusty_eyes::pipeline::DummyPipeline;
+    println!("[WARNING] ONNX Runtime not available - using dummy pipeline");
+    Ok(Box::new(DummyPipeline::new()))
 }
 
 fn main() -> anyhow::Result<()> {
