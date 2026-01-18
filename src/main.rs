@@ -398,10 +398,14 @@ fn main() -> anyhow::Result<()> {
                   // Convert RemoteResult to PipelineOutput
                   if let Some(mesh) = res.face_mesh {
                        // Log Mesh Summary
-                       log::info!("[REMOTE] Received FaceMesh: {} points. Gaze: {:?}", mesh.points.len(), res.gaze);
+                       let msg = format!("[REMOTE] Received FaceMesh: {} points. Gaze: {:?}", mesh.points.len(), res.gaze);
+                       log::info!("{}", msg);
+                       println!("{}", msg); // Print to console for user visibility
                        
                        if !show_mesh {
-                           log::warn!("[REMOTE] FaceMesh received but hidden! Press '1' to toggle visibility.");
+                           let warn = "[REMOTE] FaceMesh received but hidden! Press '1' to toggle visibility.";
+                           log::warn!("{}", warn);
+                           println!("{}", warn);
                        }
 
                        if let Some((yaw, pitch)) = res.gaze {
