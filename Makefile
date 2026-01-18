@@ -8,7 +8,7 @@ all: build
 setup-apt:
 	@echo "Installing dependencies for Debian/Ubuntu..."
 	sudo apt-get update
-	sudo apt-get install -y build-essential libssl-dev pkg-config python3-dev python3-pip protobuf-compiler lld
+	sudo apt-get install -y build-essential libssl-dev pkg-config python3-dev python3-pip protobuf-compiler
 	# GStreamer dependencies
 	sudo apt-get install -y libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
 		libgstreamer-plugins-bad1.0-dev gstreamer1.0-plugins-base \
