@@ -1,9 +1,27 @@
 #!/bin/bash
 set -e
 
-# Rusty Eyes Startup Script
+# Detect OS
+OS_TYPE=$(uname)
+echo "[SETUP] Detected OS: $OS_TYPE"
 
-echo "=== Rusty Eyes Launcher ==="
+# Ensure Cargo is in PATH (common issue in non-interactive SSH)
+if [ -f "$HOME/.cargo/env" ]; then
+    source "$HOME/.cargo/env"
+fi
+
+if [ "$OS_TYPE" = "Linux" ]; then
+    echo "[SETUP] Linux detected. Building Overlay..."
+    cargo build --release --bin overlay_linux
+    
+    # Symlink or Copy to ./overlay_app (what main.rs expects)
+    cp target/release/overlay_linux ./overlay_app
+    chmod +x ./overlay_app
+elif [ "$OS_TYPE" = "Darwin" ]; then
+    echo "[SETUP] macOS detected. using existing overlay logic or prebuilt."
+    # If Swift overlay needs building, do it here.
+    # For now assume user has it or it's built elsewhere.
+fi
 
 # 1. Check Python Environment
 if [ ! -d "venv" ]; then
