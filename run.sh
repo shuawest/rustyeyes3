@@ -49,4 +49,17 @@ fi
 # 2. Build and Run Rust Application
 echo "[RUN] Starting Rusty Eyes..."
 # We use --release for performance, especially for video processing
-cargo run --release
+
+# Check if running on Ubuntu 18.04 (old glibc, ONNX Runtime incompatible)
+CARGO_FEATURES=""
+if [ "$OS_TYPE" = "Linux" ]; then
+    if command -v lsb_release &> /dev/null; then
+        UBUNTU_VERSION=$(lsb_release -rs)
+        if [ "$UBUNTU_VERSION" = "18.04" ]; then
+            echo "[INFO] Ubuntu 18.04 detected - building without ONNX Runtime due to glibc incompatibility"
+            CARGO_FEATURES="--no-default-features"
+        fi
+    fi
+fi
+
+cargo run --release $CARGO_FEATURES
