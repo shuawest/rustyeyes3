@@ -127,7 +127,7 @@ fn main() -> anyhow::Result<()> {
     let mut calibration_mode = false;
 
     println!("Starting Pipeline...");
-    println!("Controls: [1] Mesh [2] Pose [3] Gaze [4] Model [5] Mirror [6] Overlay [7] Moondream [9] Calibration [Space] Capture");
+    println!("Controls: [1] Mesh [2] Pose [3] Gaze [4] Model [5] Mirror [6] Overlay [7] Moondream [8] Blend [9] Calibration [Space] Capture");
 
     // State for Overlay
     // let mut show_overlay = true; // Moved to config above
