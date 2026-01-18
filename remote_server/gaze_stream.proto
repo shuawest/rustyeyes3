@@ -6,6 +6,14 @@ package gazestream;
 service GazeStreamService {
   // Bidirectional streaming: client sends video frames, server returns face mesh results
   rpc StreamGaze(stream VideoFrame) returns (stream FaceMeshResult);
+
+  // Passive observation: receive results for a specific stream_id without sending video
+  rpc SubscribeGaze(SubscriptionRequest) returns (stream FaceMeshResult);
+}
+
+// Request to subscribe to a stream's results
+message SubscriptionRequest {
+  string stream_id = 1;
 }
 
 // Video frame from client

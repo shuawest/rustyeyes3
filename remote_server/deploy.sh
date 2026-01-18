@@ -11,7 +11,7 @@ echo "=== Deploying to $HOST (User Space) ==="
 # 1. Copy files
 echo "[1/5] Copying files..."
 ssh $HOST "mkdir -p $DEPLOY_DIR"
-scp remote_server/gaze_stream.proto remote_server/requirements.txt remote_server/server.py $HOST:$DEPLOY_DIR/
+scp remote_server/gaze_stream.proto remote_server/requirements.txt remote_server/server.py remote_server/subscriber_example.py $HOST:$DEPLOY_DIR/
 
 # 2. Install dependencies
 echo "[2/5] Installing Python dependencies..."

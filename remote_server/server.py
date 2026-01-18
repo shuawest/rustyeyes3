@@ -12,6 +12,8 @@ import numpy as np
 import mediapipe as mp
 import threading
 import json
+import queue
+from collections import defaultdict
 from flask import Flask, jsonify
 import logging
 
@@ -22,6 +24,43 @@ from grpc_health.v1 import health
 from grpc_health.v1 import health_pb2
 from grpc_health.v1 import health_pb2_grpc
 
+
+class StreamManager:
+    """Manages Pub/Sub for gaze streams"""
+    def __init__(self):
+        # Map stream_id -> list of Queue
+        self._subscribers = defaultdict(list)
+        self._lock = threading.Lock()
+
+    def subscribe(self, stream_id):
+        """Register a new subscriber and return their queue"""
+        q = queue.Queue(maxsize=30)  # Buffer ~1s of frames
+        with self._lock:
+            self._subscribers[stream_id].append(q)
+        print(f"[MANAGER] New subscriber to stream '{stream_id}'")
+        return q
+
+    def unsubscribe(self, stream_id, q):
+        """Remove a subscriber"""
+        with self._lock:
+            if q in self._subscribers[stream_id]:
+                self._subscribers[stream_id].remove(q)
+        print(f"[MANAGER] Subscriber removed from stream '{stream_id}'")
+
+    def publish(self, stream_id, result):
+        """Fan-out result to all subscribers"""
+        with self._lock:
+            queues = self._subscribers.get(stream_id, []).copy()
+        
+        for q in queues:
+            try:
+                q.put_nowait(result)
+            except queue.Full:
+                # Drop frame for slow subscriber to avoid blocking publisher
+                pass
+
+# Global manager instance
+stream_manager = StreamManager()
 
 class GazeStreamService(gaze_stream_pb2_grpc.GazeStreamServiceServicer):
     def __init__(self):
@@ -117,11 +156,15 @@ class GazeStreamService(gaze_stream_pb2_grpc.GazeStreamServiceServicer):
                     result.gaze.pitch = 0.0
                     result.gaze.roll = 0.0
                     
-                    if frame_count % 30 == 0:
-                        print(f"[SERVER] Processed {frame_count} frames, detected face with {len(result.landmarks)} landmarks")
                 
-                # Yield result back to client
-                yield result
+                if frame_count % 30 == 0:
+                    print(f"[SERVER] Processed {frame_count} frames, detected face with {len(result.landmarks)} landmarks")
+            
+            # 1. Publish to subscribers (Broadcast)
+            stream_manager.publish(video_frame.stream_id, result)
+
+            # 2. Yield result back to the source client (Unicast)
+            yield result
         
         except Exception as e:
             print(f"[SERVER] Error processing stream: {e}")
@@ -131,6 +174,30 @@ class GazeStreamService(gaze_stream_pb2_grpc.GazeStreamServiceServicer):
         
         print(f"[SERVER] Client disconnected. Processed {frame_count} frames total")
         self.active_clients -= 1
+
+    def SubscribeGaze(self, request, context):
+        """
+        Server Streaming RPC
+        Allows a client to observe results from a specific video stream without sending video.
+        """
+        stream_id = request.stream_id
+        print(f"[SERVER] Subscriber connected to: {stream_id}")
+        
+        q = stream_manager.subscribe(stream_id)
+        
+        try:
+            while context.is_active():
+                # Get result from queue (blocking with timeout to check connectivity)
+                try:
+                    result = q.get(timeout=1.0)
+                    yield result
+                except queue.Empty:
+                    # Keep loop alive to check context.is_active()
+                    continue
+        except Exception as e:
+             print(f"[SERVER] Subscriber error: {e}")
+        finally:
+            stream_manager.unsubscribe(stream_id, q)
 
 
 # REST API
