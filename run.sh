@@ -33,6 +33,10 @@ if [ ! -d "venv" ]; then
     echo "[SETUP] Creating Python virtual environment..."
     python3 -m venv venv
     
+    echo "[SETUP] Upgrading pip and installing build dependencies..."
+    ./venv/bin/pip install --upgrade pip setuptools wheel
+    ./venv/bin/pip install scikit-build cmake numpy
+    
     echo "[SETUP] Installing dependencies..."
     ./venv/bin/pip install -r scripts/requirements.txt
 else
