@@ -9,3 +9,23 @@ pub trait Pipeline {
     // Or simpler: Pipeline returns Output, Main/Output module draws it. 
     // Let's stick to returning Output. The Output module (window) will need to know how to draw PipelineOutput.
 }
+
+// Dummy pipeline when ONNX is not available
+pub struct DummyPipeline;
+
+impl DummyPipeline {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Pipeline for DummyPipeline {
+    fn name(&self) -> String {
+        "No ONNX (Camera Only)".to_string()
+    }
+    
+    fn process(&mut self, _frame: &ImageBuffer<Rgb<u8>, Vec<u8>>) -> Result<Option<PipelineOutput>> {
+        // Return None - no processing available
+        Ok(None)
+    }
+}
