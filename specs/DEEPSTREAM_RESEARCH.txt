@@ -1,0 +1,149 @@
+Use your MacBook as the “camera edge,” then ship an encoded low latency stream over the LAN to the Nano or Spark. Latency is usually fine if you do hardware H.264 encode on the Mac and keep buffers tiny.
+
+Confidence: 8/10
+
+Option A (recommended for simplicity): RTSP over H.264 (GStreamer)
+
+Pros: boring, stable, easy to consume on Linux/Jetson/DeepStream.
+Typical glass to glass latency on wired LAN: 80 to 250 ms (tunable). Over WiFi it can jump to 200 to 800+ ms.
+
+MacBook (sender, hardware encode via VideoToolbox):
+
+# Install: brew install gstreamer gst-plugins-good gst-plugins-bad gst-plugins-ugly gst-libav
+# List cameras:
+gst-device-monitor-1.0 Video
+
+# Send H.264 RTP over UDP to receiver (replace DEVICE_INDEX, IP):
+gst-launch-1.0 -v avfvideosrc device-index=0 ! \
+  video/x-raw,framerate=30/1,width=1280,height=720 ! \
+  videoconvert ! vtenc_h264 realtime=true allow-frame-reordering=false max-keyframe-interval=30 ! \
+  h264parse config-interval=1 ! rtph264pay pt=96 config-interval=1 ! \
+  udpsink host=RECEIVER_IP port=5004 sync=false async=false
+
+Receiver (Nano or Spark):
+
+# Jetson: prefer nvv4l2decoder
+gst-launch-1.0 -v udpsrc port=5004 caps="application/x-rtp,media=video,encoding-name=H264,payload=96" ! \
+  rtph264depay ! h264parse ! nvv4l2decoder ! \
+  nvvidconv ! video/x-raw,format=NV12 ! fakesink sync=false
+
+To feed DeepStream, you typically point it at an RTSP URL (or build a GStreamer source bin). If you want true RTSP (not raw UDP), you can run an RTSP server on the receiver (or on the Mac), but UDP RTP is the lowest latency.
+
+Option B: SRT (good over less reliable networks)
+
+Pros: resilient, still low latency, better than RTMP for real time.
+Cons: slightly more setup.
+
+Mac (ffmpeg sender, hardware encode):
+
+# brew install ffmpeg
+ffmpeg -f avfoundation -framerate 30 -video_size 1280x720 -i "0" \
+  -c:v h264_videotoolbox -b:v 4M -g 30 -bf 0 -tune zerolatency \
+  -f mpegts "srt://RECEIVER_IP:6000?mode=caller&latency=50"
+
+Receiver:
+
+ffplay "srt://0.0.0.0:6000?mode=listener&latency=50"
+
+Then swap ffplay for a GStreamer ingest or an app pipeline.
+
+Option C: WebRTC
+
+Pros: lowest “perceived” latency, NAT friendly, great for interactive.
+Cons: more moving parts, not the fastest path to DeepStream.
+
+⸻
+
+Will it introduce too much delay?
+
+For “analysis and UI feedback” (like showing gaze point on a screen), you can keep it usable if you:
+	•	Use wired Ethernet from Mac to switch and switch to Nano/Spark.
+	•	Encode H.264, 720p30 first. Move up later.
+	•	Disable B frames, set GOP to 30 (keyframe every 1s at 30 fps), keep bit rate reasonable.
+	•	Keep receiver sink sync=false and avoid big queues.
+
+Rules of thumb:
+	•	Nano: keep it light. 720p30 H.264 baseline/main, minimal extra copies.
+	•	Spark: you have more headroom.
+
+Practical tuning checklist
+	•	Prefer 720p30 first, then 1080p.
+	•	Avoid WiFi for anything gaze related.
+	•	If you need lower latency, use UDP RTP and reduce any “latency” parameters, and keep buffers tiny.
+
+If you tell me whether your Mac and Nano/Spark are on gigabit Ethernet or WiFi, I can give you a tighter expected latency range and the best exact pipeline for DeepStream ingest.
+
+
+Best path if the cameras are physically on the Jetson Nano and you run the UI “locally” on the Nano: do not ship “updates” separately unless you have to. Render the results on the video on the Nano, then stream the annotated video (or expose metadata over a lightweight side channel).
+
+Confidence: 8/10
+
+1) Lowest friction: overlay in DeepStream, then stream the annotated video
+	•	Add your gaze or head pose output into NvDsObjectMeta / NvDsFrameMeta (DeepStream metadata).  ￼
+	•	Use nvdsosd to draw boxes, text, lines, circles (crosshair for gaze, axis indicator for head pose).  ￼
+	•	Output options:
+	•	Local display (headless friendly): Xvfb or a virtual display if you need a GUI, otherwise skip.
+	•	Stream out: RTSP, UDP, or file sink.
+
+Why this is best: the UI is just video. No sync bugs, no schema design, no separate timing.
+
+DeepStream OSD doc: https://docs.nvidia.com/metropolis/deepstream/dev-guide/text/DS_plugin_gst-nvdsosd.html  ￼
+
+2) If you need “data updates” (for a separate app): DeepStream message path
+
+Use DeepStream’s built in “metadata to messages” pipeline:
+	•	nvmsgconv converts DeepStream metadata to JSON payloads.  ￼
+	•	nvmsgbroker publishes those payloads to a broker (MQTT, Kafka, AMQP, etc).  ￼
+
+This is the canonical way to export per frame or per object results to another process, including a UI.
+
+Docs:
+	•	nvmsgconv: https://docs.nvidia.com/metropolis/deepstream/dev-guide/text/DS_plugin_gst-nvmsgconv.html  ￼
+	•	nvmsgbroker: https://docs.nvidia.com/metropolis/deepstream/dev-guide/text/DS_plugin_gst-nvmsgbroker.html  ￼
+
+Practical recommendation:
+	•	Publish at 10 to 15 Hz for UI (not every frame) to reduce load.
+	•	Include fields: timestamp, face id, gaze vector, head pose (yaw, pitch, roll), screen point if you compute it.
+	•	UI subscribes and draws overlays locally (or logs, alerts, etc).
+
+3) If UI is on the same Nano box: skip brokers, use an in process pad probe
+
+If your UI process is local and you own the pipeline:
+	•	Add a pad probe after nvinfer and read NvDsFrameMeta / NvDsObjectMeta.
+	•	Send updates via a local WebSocket or Unix socket to your UI.
+
+Metadata hierarchy reference: https://docs.nvidia.com/metropolis/deepstream/dev-guide/text/DS_plugin_metadata.html  ￼
+
+Latency reality check
+	•	Overlay + stream annotated video: usually lowest complexity, predictable latency.
+	•	Separate metadata channel: adds a bit of lag and complexity, but still fine if you throttle and timestamp.
+
+If your UI is literally “a dot on the screen where the user looks,” the cleanest architecture is: compute gaze, overlay dot with nvdsosd, then stream that video to wherever you want to view it.
+
+
+Yes, but with tight constraints.
+
+That part number looks like a Jetson Nano Developer Kit. Your spec line says 2GB RAM, which is the big limiter.  ￼
+Confidence: 8/10
+
+DeepStream on Jetson Nano 2GB
+	•	Possible, but you will fight memory pressure and need to keep the pipeline small (single stream, 720p, minimal extra plugins, avoid heavy Python bindings if you can). NVIDIA forum users report DeepStream can run on Nano 2GB but memory gets consumed quickly.  ￼
+Docs: https://docs.nvidia.com/metropolis/deepstream/dev-guide/text/DS_Installation.html  ￼
+
+TAO GazeNet on Jetson Nano 2GB
+	•	Inference might run, but in practice it is often slow and unstable on Nano 2GB (people report getting stuck after a few frames and low FPS with related face models).  ￼
+	•	Deployment support note: NVIDIA says GazeNet deployment is obsolete in newer DeepStream, and DeepStream 7.0 is the last version that supports the GazeNet DeepStream TAO app path they reference.  ￼
+
+What I would do with that exact hardware
+	•	Use the Nano for camera ingest + lightweight pre processing + streaming.
+	•	Run GazeNet inference on the DGX Spark (or another stronger GPU box), then send back metadata or an annotated stream.
+
+If you insist on running it on the Nano 2GB:
+	•	1 stream only, 720p or lower
+	•	use TensorRT engine, INT8 if possible
+	•	avoid UI on the Nano, keep it headless
+	•	expect low FPS and possible instability under memory pressure
+
+Links
+	•	Jetson Nano kit identification: https://www.amazon.com/NVIDIA-Jetson-Nano-Developer-945-13450-0000-100/dp/B084DSDDLT  ￼
+	•	GazeNet + DeepStream 7.0 limitation (forum): https://forums.developer.nvidia.com/t/how-to-deploy-gazenet-using-deepstream-tao/333918  ￼
