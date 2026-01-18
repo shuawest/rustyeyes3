@@ -19,3 +19,4 @@ pub mod config;
 pub mod ttf;
 pub mod rectification;
 pub mod gaze_tests;
+pub mod streaming;
