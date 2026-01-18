@@ -107,6 +107,9 @@ class GazeStreamService(gaze_stream_pb2_grpc.GazeStreamServiceServicer):
         
         try:
             for video_frame in request_iterator:
+                # Trace: Server Receive
+                ts_recv = int(time.time() * 1_000_000)
+                
                 frame_count += 1
                 self.total_frames_processed += 1
                 
@@ -133,10 +136,26 @@ class GazeStreamService(gaze_stream_pb2_grpc.GazeStreamServiceServicer):
                 # Process with MediaPipe
                 results = self.face_mesh.process(rgb_frame)
                 
-                # Create result message
                 result = gaze_stream_pb2.FaceMeshResult()
                 result.timestamp_us = video_frame.timestamp_us
                 result.stream_id = video_frame.stream_id
+                
+                # Copy trace timestamps from request and add server ones
+                if video_frame.trace_timestamps:
+                    for k, v in video_frame.trace_timestamps.items():
+                        result.trace_timestamps[k] = v
+                        
+                # Add Server Timestamps
+                now_us = int(time.time() * 1_000_000)
+                # We can't easily get 'recv' time precisely here as iterator yields, but 'now' is close to start of processing
+                result.trace_timestamps["server_recv"] = now_us 
+                # Actually, inference just finished (lines above), so 'server_inference_end' is now.
+                # 'server_recv' was before cv2.imdecode.
+                # Let's adjust slightly:
+                # We can't go back in time, but... 
+                
+                # Let's just mark inference_end
+                result.trace_timestamps["server_proc_end"] = now_us
                 
                 if results.multi_face_landmarks:
                     # Extract first face
@@ -157,6 +176,9 @@ class GazeStreamService(gaze_stream_pb2_grpc.GazeStreamServiceServicer):
                         result.face_box.y = min(y_coords)
                         result.face_box.width = max(x_coords) - min(x_coords)
                         result.face_box.height = max(y_coords) - min(y_coords)
+                    
+                    # Add recv timestamp we captured earlier
+                    result.trace_timestamps["server_recv"] = ts_recv
                     
                     # Estimate gaze using Iris Tracking (Geometric)
                     # 468: Left Iris Center, 473: Right Iris Center

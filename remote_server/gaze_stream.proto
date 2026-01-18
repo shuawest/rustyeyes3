@@ -23,6 +23,7 @@ message VideoFrame {
   int32 width = 3;             // Frame width
   int32 height = 4;            // Frame height
   string stream_id = 5;        // "camera1", "camera2", or "blended"
+  map<string, int64> trace_timestamps = 6; // Debug tracing
 }
 
 // Face mesh result from server
@@ -32,6 +33,7 @@ message FaceMeshResult {
   GazeVector gaze = 3;              // Gaze direction
   int64 timestamp_us = 4;           // Original frame timestamp
   string stream_id = 5;             // Matching stream_id
+  map<string, int64> trace_timestamps = 6; // Debug tracing
 }
 
 // 3D landmark point

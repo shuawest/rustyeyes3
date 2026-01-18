@@ -22,6 +22,7 @@ pub struct RemoteResult {
     pub gaze: Option<(f32, f32)>, // yaw, pitch
     pub timestamp: u64,
     pub stream_id: String,
+    pub trace_timestamps: std::collections::HashMap<String, i64>,
 }
 
 impl GazeStreamClient {
@@ -106,12 +107,18 @@ pub fn frame_to_proto(
     // Attempt JPEG encoding
     let _ = dyn_imgs.write_to(&mut std::io::Cursor::new(&mut buf), image::ImageFormat::Jpeg);
 
+    // Convert to microrsecond timestamp
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_micros() as i64;
+    let mut stamps = std::collections::HashMap::new();
+    stamps.insert("client_send".to_string(), now);
+
     proto::VideoFrame {
         frame_data: buf,
         timestamp_us,
         width: frame.width() as i32,
         height: frame.height() as i32,
         stream_id: stream_id.to_string(),
+        trace_timestamps: stamps,
     }
 }
 
@@ -151,5 +158,6 @@ pub fn proto_to_result(proto_res: proto::FaceMeshResult) -> RemoteResult {
         gaze,
         timestamp: proto_res.timestamp_us as u64,
         stream_id: proto_res.stream_id,
+        trace_timestamps: proto_res.trace_timestamps,
     }
 }

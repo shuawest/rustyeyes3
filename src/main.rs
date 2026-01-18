@@ -449,6 +449,33 @@ fn main() -> anyhow::Result<()> {
                             println!("{}", msg);
                        }
                        
+                       // --- LATENCY TRACING ---
+                       // Calculate breakdowns
+                       let now_us = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_micros() as i64;
+                       
+                       if let Some(t_send) = res.trace_timestamps.get("client_send") {
+                           let total_rtt = now_us - t_send;
+                           
+                           let t_serv_recv = res.trace_timestamps.get("server_recv").unwrap_or(&0);
+                           let t_serv_end = res.trace_timestamps.get("server_proc_end").unwrap_or(&0);
+                           
+                           if *t_serv_recv > 0 && *t_serv_end > 0 {
+                               let upload = t_serv_recv - t_send;
+                               let inference = t_serv_end - t_serv_recv;
+                               let download = now_us - t_serv_end;
+                               
+                               if remote_frame_count % 10 == 0 { // Log every 10th frame to avoid flood but see patterns
+                                   let log_msg = format!("[LATENCY] Total: {}ms | Upload: {}ms | Infer: {}ms | Download: {}ms", 
+                                       total_rtt / 1000, 
+                                       upload / 1000, 
+                                       inference / 1000, 
+                                       download / 1000);
+                                   println!("{}", log_msg);
+                                   log::info!("{}", log_msg);
+                               }
+                           }
+                       }
+                       
                        if !show_mesh {
                            let warn = "[REMOTE] FaceMesh received but hidden! Press '1' to toggle visibility.";
                            log::warn!("{}", warn);
