@@ -14,6 +14,9 @@ use rusttype::{Font, Scale, Point, PositionedGlyph};
 #[cfg(target_os = "linux")]
 use winit::platform::x11::WindowAttributesExtX11;
 
+#[cfg(target_os = "linux")]
+use winit::platform::x11::WindowExtX11;
+
 // Custom Events from blocking stdin thread
 #[derive(Debug)]
 enum UserEvent {
@@ -91,7 +94,7 @@ impl AppState {
                 for j in (0..width).step_by(100) {
                     let idx = i as usize * width as usize + j as usize;
                     if idx < buffer.len() {
-                        buffer[idx] = 0x20FF0000; // Faint red dots
+                        buffer[idx] = 0xFFFF0000; // Bright red dots (ARGB: full alpha, red)
                     }
                 }
             }
@@ -232,6 +235,36 @@ impl ApplicationHandler<UserEvent> for App {
         
         // Set cursor passthrough for click-through behavior
         let _ = window.set_cursor_hittest(false);
+        
+        // Additional X11 setup for input pass-through
+        #[cfg(target_os = "linux")]
+        {
+            use winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
+            
+            // Get X11 display and window
+            if let Ok(handle) = window.window_handle() {
+                if let RawWindowHandle::Xlib(xlib_handle) = handle.as_raw() {
+                    unsafe {
+                        use x11::xlib;
+                        let display = xlib_handle.display.as_ptr() as *mut xlib::Display;
+                        let window_id = xlib_handle.window;
+                        
+                        // Create an empty input region to make window fully transparent to input
+                        let region = x11::xfixes::XFixesCreateRegion(display, std::ptr::null_mut(), 0);
+                        x11::xfixes::XFixesSetWindowShapeRegion(
+                            display,
+                            window_id,
+                            x11::xfixes::ShapeInput as i32,
+                            0,
+                            0,
+                            region,
+                        );
+                        x11::xfixes::XFixesDestroyRegion(display, region);
+                        xlib::XFlush(display);
+                    }
+                }
+            }
+        }
         // let _ = window.set_ignore_cursor_events(true); // Deprecated/Removed in 0.30
         
         let window = Arc::new(window);
