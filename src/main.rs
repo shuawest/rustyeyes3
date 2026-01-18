@@ -413,39 +413,44 @@ fn main() -> anyhow::Result<()> {
                      }
                  }
              }
-             
-             // Check for results (non-blocking) - Drain queue to get latest
-             let mut best_remote: Option<PipelineOutput> = None;
-             while let Ok(res) = rx_remote_result.try_recv() {
-                  last_remote_ts = std::time::Instant::now();
-                  
-                  // Convert RemoteResult to PipelineOutput
-                  if let Some(mut mesh) = res.face_mesh {
-                       // CRITICAL FIX: MediaPipe Remote returns NORMALIZED [0,1] coordinates.
-                       // We must scale them to the image dimensions (Pixels) to match local pipeline behavior.
-                       let img_w = latest_realtime_frame.width() as f32;
-                       let img_h = latest_realtime_frame.height() as f32;
-                       
-                       for (i, p) in mesh.points.iter_mut().enumerate() {
-                           let old_x = p.x;
-                           let old_y = p.y;
-                           
-                           // Reverted Aspect Ratio fix: The previous logic pushed Y off-screen.
-                           // We will use raw scaling for now and inspect the "Extreme" landmarks.
-                           // p.x is normalized [0,1], p.y is normalized [0,1].
-                           
-                           p.x *= img_w;
-                           p.y *= img_h;
-                           
-                           // Debug widely spaced points to verify face shape
-                           // 10: Top, 152: Bottom, 234: Left Cheek, 454: Right Cheek
-                           if (i == 10 || i == 152 || i == 234 || i == 454) && remote_frame_count % 30 == 0 {
-                               println!("[DEBUG] Mesh[{}]: ({:.4}, {:.4}) -> ({:.1}, {:.1}) [W={:.1}, H={:.1}]", 
-                                   i, old_x, old_y, p.x, p.y, img_w, img_h);
-                           }
-                           
-                           // p.z is relative, usually keep as is or scale by width? Keep as is for now.
-                       }
+                          // Check for results (non-blocking) - Drain queue to get latest
+                let mut best_remote: Option<PipelineOutput> = None;
+                while let Ok(res) = rx_remote_result.try_recv() {
+                     last_remote_ts = std::time::Instant::now();
+                     
+                     // Convert RemoteResult to PipelineOutput
+                     if let Some(mut mesh) = res.face_mesh {
+                          // CRITICAL FIX: MediaPipe returns normalized [0,1] landmarks relative to detected face region
+                          // We must apply face_box offset and scale to position them correctly in full frame
+                          let img_w = latest_realtime_frame.width() as f32;
+                          let img_h = latest_realtime_frame.height() as f32;
+                          
+                          // Get face bounding box (default to full frame if not provided)
+                          let (bbox_x, bbox_y, bbox_w, bbox_h) = if let Some(bbox) = res.face_box {
+                              (bbox.x * img_w, bbox.y * img_h, bbox.width * img_w, bbox.height * img_h)
+                          } else {
+                              // Fallback: assume landmarks are already in image coordinates
+                              (0.0, 0.0, img_w, img_h)
+                          };
+                          
+                          for (i, p) in mesh.points.iter_mut().enumerate() {
+                              let old_x = p.x;
+                              let old_y = p.y;
+                              
+                              // Landmarks are normalized [0,1] within the face_box
+                              // Transform: normalized -> face_box coords -> image coords
+                              p.x = bbox_x + (p.x * bbox_w);
+                              p.y = bbox_y + (p.y * bbox_h);
+                              
+                              // Debug widely spaced points to verify face shape
+                              // 10: Top, 152: Bottom, 234: Left Cheek, 454: Right Cheek
+                              if (i == 10 || i == 152 || i == 234 || i == 454) && remote_frame_count % 30 == 0 {
+                                  println!("[DEBUG] Mesh[{}]: ({:.4}, {:.4}) -> ({:.1}, {:.1}) [BBox: {:.1},{:.1} {}x{}]", 
+                                      i, old_x, old_y, p.x, p.y, bbox_x, bbox_y, bbox_w as i32, bbox_h as i32);
+                              }
+                              
+                              // p.z is relative depth, keep as is
+                          }
                   
                        // Log Mesh Summary
                        let msg = format!("[REMOTE] Received FaceMesh: {} points. Gaze: {:?}", mesh.points.len(), res.gaze);

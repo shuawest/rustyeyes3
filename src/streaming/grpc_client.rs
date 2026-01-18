@@ -18,6 +18,7 @@ pub struct GazeStreamClient {
 
 pub struct RemoteResult {
     pub face_mesh: Option<Landmarks>,
+    pub face_box: Option<Rect>,  // Bounding box for face region
     pub gaze: Option<(f32, f32)>, // yaw, pitch
     pub timestamp: u64,
     pub stream_id: String,
@@ -127,6 +128,17 @@ pub fn proto_to_result(proto_res: proto::FaceMeshResult) -> RemoteResult {
         landmarks = Some(Landmarks { points });
     }
     
+    let face_box = if let Some(bbox) = proto_res.face_box {
+        Some(Rect {
+            x: bbox.x,
+            y: bbox.y,
+            width: bbox.width,
+            height: bbox.height,
+        })
+    } else {
+        None
+    };
+    
     let gaze = if let Some(g) = proto_res.gaze {
         Some((g.yaw, g.pitch))
     } else {
@@ -135,6 +147,7 @@ pub fn proto_to_result(proto_res: proto::FaceMeshResult) -> RemoteResult {
     
     RemoteResult {
         face_mesh: landmarks,
+        face_box,
         gaze,
         timestamp: proto_res.timestamp_us as u64,
         stream_id: proto_res.stream_id,
