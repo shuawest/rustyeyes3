@@ -94,6 +94,10 @@ class GazeStreamService(gaze_stream_pb2_grpc.GazeStreamServiceServicer):
         Receives video frames, processes them, yields face mesh results
         """
         print(f"[SERVER] New client connected: {context.peer()}")
+        
+        # FIX: Send headers immediately so client stops waiting and can start sending frames
+        context.send_initial_metadata(())
+        
         self.active_clients += 1
         
         frame_count = 0
