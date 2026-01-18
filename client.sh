@@ -70,6 +70,24 @@ function status() {
     fi
 }
 
+function completion() {
+    cat <<EOF
+_client_sh_completion() {
+    local cur prev opts
+    COMPREPLY=()
+    cur="\${COMP_WORDS[COMP_CWORD]}"
+    opts="start startnlog stop restart log status version completion"
+
+    if [[ \${cur} == * ]] ; then
+        COMPREPLY=( \$(compgen -W "\${opts}" -- \${cur}) )
+        return 0
+    fi
+}
+complete -F _client_sh_completion ./client.sh
+complete -F _client_sh_completion client.sh
+EOF
+}
+
 case "$1" in
     start)
         start
@@ -96,8 +114,11 @@ case "$1" in
     version)
         $BINARY --version
         ;;
+    completion)
+        completion
+        ;;
     *)
-        echo "Usage: $0 {start|startnlog|stop|restart|log|status|version}"
+        echo "Usage: $0 {start|startnlog|stop|restart|log|status|version|completion}"
         exit 1
         ;;
 esac
