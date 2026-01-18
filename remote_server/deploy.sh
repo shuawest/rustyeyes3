@@ -31,7 +31,7 @@ echo "[5/5] Starting server in background..."
 # Start new instance via tmux for persistence
 echo "Starting tmux session 'gaze_server'..."
 ssh $HOST "tmux kill-session -t gaze_server || true"
-ssh $HOST "cd $DEPLOY_DIR && tmux new-session -d -s gaze_server 'python3 server.py > server.log 2>&1'"
+ssh $HOST "cd $DEPLOY_DIR && tmux new-session -d -s gaze_server 'PYTHONUNBUFFERED=1 python3 server.py > server.log 2>&1'"
 
 echo ""
 echo "=== Deployment Complete ==="
