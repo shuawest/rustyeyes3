@@ -1,0 +1,49 @@
+syntax = "proto3";
+
+package gazestream;
+
+// Video streaming and inference service
+service GazeStreamService {
+  // Bidirectional streaming: client sends video frames, server returns face mesh results
+  rpc StreamGaze(stream VideoFrame) returns (stream FaceMeshResult);
+}
+
+// Video frame from client
+message VideoFrame {
+  bytes frame_data = 1;        // H.264 encoded frame
+  int64 timestamp_us = 2;      // Microsecond timestamp
+  int32 width = 3;             // Frame width
+  int32 height = 4;            // Frame height
+  string stream_id = 5;        // "camera1", "camera2", or "blended"
+}
+
+// Face mesh result from server
+message FaceMeshResult {
+  repeated Landmark landmarks = 1;  // 468 face mesh landmarks
+  BoundingBox face_box = 2;         // Face bounding box
+  GazeVector gaze = 3;              // Gaze direction
+  int64 timestamp_us = 4;           // Original frame timestamp
+  string stream_id = 5;             // Matching stream_id
+}
+
+// 3D landmark point
+message Landmark {
+  float x = 1;
+  float y = 2;
+  float z = 3;
+}
+
+// Bounding box
+message BoundingBox {
+  float x = 1;
+  float y = 2;
+  float width = 3;
+  float height = 4;
+}
+
+// Gaze direction vector
+message GazeVector {
+  float yaw = 1;    // Horizontal angle (degrees)
+  float pitch = 2;  // Vertical angle (degrees)
+  float roll = 3;   // Head roll (degrees)
+}
