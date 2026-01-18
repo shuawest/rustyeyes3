@@ -71,6 +71,11 @@ case "$1" in
     start)
         start
         ;;
+    startnlog)
+        start
+        sleep 1
+        log
+        ;;
     stop)
         stop
         ;;
@@ -86,7 +91,8 @@ case "$1" in
         status
         ;;
     *)
-        echo "Usage: $0 {start|stop|restart|log|status}"
+    *)
+        echo "Usage: $0 {start|startnlog|stop|restart|log|status}"
         exit 1
         ;;
 esac
