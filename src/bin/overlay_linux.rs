@@ -21,7 +21,6 @@ enum UserEvent {
     UpdateMoondream(f32, f32),
     UpdateVerified(f32, f32),
     UpdatePending(f32, f32),
-    UpdatePending(f32, f32),
     UpdateMesh(Vec<(f32, f32)>),
     UpdateMenu(String),
     UpdateFont(String, u32),
@@ -36,7 +35,6 @@ struct AppState {
     // Data State
     gaze_pos: Option<(f32, f32)>,
     moondream_pos: Option<(f32, f32)>,
-    verified_pos: Option<(f32, f32)>,
     verified_pos: Option<(f32, f32)>,
     pending_pos: Option<(f32, f32)>,
     face_mesh: Option<Vec<(f32, f32)>>,
@@ -391,6 +389,10 @@ fn main() -> io::Result<()> {
                         }
                     },
                      "P" => {
+                        if parts.len() >= 3 {
+                             let x = parts[1].parse().unwrap_or(0.0);
+                             let y = parts[2].parse().unwrap_or(0.0);
+                             let _ = proxy_clone.send_event(UserEvent::UpdatePending(x, y));
                         }
                     },
                     "L" => {
