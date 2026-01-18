@@ -25,6 +25,8 @@ from grpc_health.v1 import health_pb2
 from grpc_health.v1 import health_pb2_grpc
 
 
+VERSION = "0.2.0"
+
 class StreamManager:
     """Manages Pub/Sub for gaze streams"""
     def __init__(self):
@@ -85,7 +87,8 @@ class GazeStreamService(gaze_stream_pb2_grpc.GazeStreamServiceServicer):
             "stats": {
                 "total_frames_processed": self.total_frames_processed,
                 "active_clients": self.active_clients
-            }
+            },
+            "version": VERSION
         }
     
     def StreamGaze(self, request_iterator, context):
@@ -250,7 +253,7 @@ def serve(port=50051, rest_port=8080):
     server.add_insecure_port(f'[::]:{port}')
     server.start()
     
-    print(f"[SERVER] gRPC Gaze Streaming Server started on port {port}")
+    print(f"[SERVER] gRPC Gaze Streaming Server v{VERSION} started on port {port}")
     
     # Start REST API in background thread
     rest_thread = threading.Thread(target=run_rest_server, args=(rest_port,), daemon=True)

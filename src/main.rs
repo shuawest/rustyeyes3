@@ -71,6 +71,7 @@ fn create_pipeline(_model_type: &str, _config: &AppConfig) -> anyhow::Result<Box
 
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
+    println!("Rusty Eyes Client v{}", env!("CARGO_PKG_VERSION"));
 
     if args.list {
         let cameras = nokhwa::query(nokhwa::utils::ApiBackend::Auto)?;
