@@ -3,3 +3,4 @@ grpcio-tools
 opencv-python-headless
 mediapipe
 numpy
+flask

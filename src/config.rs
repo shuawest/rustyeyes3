@@ -25,6 +25,7 @@ pub struct Defaults {
     pub moondream_active: bool,
     // New Params
     pub head_pose_length: f32, 
+    pub remote_dgx_url: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -47,6 +48,7 @@ impl Default for Defaults {
             mirror_mode: true,
             moondream_active: false,
             head_pose_length: 150.0,
+            remote_dgx_url: None,
         }
     }
 }

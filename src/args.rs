@@ -18,4 +18,8 @@ pub struct Args {
     /// List available cameras
     #[arg(long)]
     pub list: bool,
+
+    /// Remote DGX host URL (e.g. http://jowestdgxe:50051)
+    #[arg(long)]
+    pub remote_dgx: Option<String>,
 }

@@ -21,6 +21,7 @@ use rusty_eyes::font;
 use rusty_eyes::config;
 use rusty_eyes::ttf;
 use rusty_eyes::rectification;
+use rusty_eyes::streaming::grpc_client::{GazeStreamClient, RemoteResult};
 
 use rusty_eyes::font::FONT_HEIGHT;
 use args::Args;
@@ -229,6 +230,62 @@ fn main() -> anyhow::Result<()> {
     
     let mut moondream_pending = false;
 
+    // --- REMOTE CLIENT SETUP ---
+    let (tx_remote_frame, rx_remote_frame) = std::sync::mpsc::channel::<image::DynamicImage>();
+    let (tx_remote_result, rx_remote_result) = std::sync::mpsc::channel::<RemoteResult>();
+    
+    // Determine Remote URL: Arg > Config > None
+    let remote_url = args.remote_dgx.clone().or(config.defaults.remote_dgx_url.clone());
+    let remote_available = remote_url.is_some();
+    let mut use_remote = remote_available; // Default to on if enabled
+    let mut last_remote_ts = std::time::Instant::now();
+
+    if let Some(dgx_url) = &remote_url {
+        println!("Connecting to Remote DGX: {}", dgx_url);
+        let url = dgx_url.clone();
+        let tx_res = tx_remote_result.clone();
+        
+        std::thread::spawn(move || {
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            rt.block_on(async {
+                let mut client = match GazeStreamClient::connect(url).await {
+                    Ok(c) => c,
+                    Err(e) => {
+                        println!("Failed to connect to DGX: {}", e);
+                        return;
+                    }
+                };
+                
+                let (mut grpc_tx, mut grpc_rx) = match client.stream_video().await {
+                   Ok((tx, rx)) => (tx, rx),
+                   Err(e) => {
+                       println!("Failed to start stream: {}", e);
+                       return;
+                   }
+                };
+                
+                // Spawn sender task
+                let mut rx_frame = rx_remote_frame; // Take ownership
+                tokio::spawn(async move {
+                    while let Ok(frame) = rx_frame.recv() {
+                         let proto_frame = rusty_eyes::streaming::grpc_client::frame_to_proto(
+                             &frame.to_rgb8(), 0, "camera1"
+                         );
+                         if let Err(_) = grpc_tx.send(proto_frame).await {
+                             break;
+                         }
+                    }
+                });
+                
+                // Receiver loop
+                while let Some(result) = grpc_rx.message().await.ok().flatten() {
+                    let res = rusty_eyes::streaming::grpc_client::proto_to_result(result);
+                    let _ = tx_res.send(res);
+                }
+            });
+        });
+    }
+
     // We keep one robust pipeline active
     // pipeline is already initialized above
     
@@ -285,7 +342,43 @@ fn main() -> anyhow::Result<()> {
         
         // --- PROCESSING (Moved Up for Sync) ---
         // Always run the full pipeline FIRST so we have the Gaze for this exact frame
-        let output = pipeline.process(&latest_realtime_frame)?;
+        // This ensures consistent behavior even if remote fails
+        let mut output = pipeline.process(&latest_realtime_frame)?;
+
+        // Send to remote if enabled
+        if remote_available && use_remote {
+             // Send frame (non-blocking)
+             let _ = tx_remote_frame.send(image::DynamicImage::ImageRgb8(latest_realtime_frame.clone()));
+             
+             // Check for results (non-blocking) - Drain queue to get latest
+             let mut best_remote: Option<PipelineOutput> = None;
+             while let Ok(res) = rx_remote_result.try_recv() {
+                  last_remote_ts = std::time::Instant::now();
+                  
+                  // Convert RemoteResult to PipelineOutput
+                  if let Some(mesh) = res.face_mesh {
+                       if let Some((yaw, pitch)) = res.gaze {
+                           best_remote = Some(PipelineOutput::Gaze {
+                               left_eye: types::Point3D::default(),
+                               right_eye: types::Point3D::default(),
+                               yaw,
+                               pitch,
+                               roll: 0.0,
+                               vector: types::Point3D::default(),
+                               landmarks: Some(mesh),
+                           });
+                       } else {
+                           best_remote = Some(PipelineOutput::Landmarks(mesh));
+                       }
+                  }
+             }
+             
+             // Override local output if we have a fresh remote result
+             if let Some(remote_out) = best_remote {
+                 output = Some(remote_out);
+             }
+        }
+        
         last_pipeline_output = output.clone();
 
         // --- MOONDREAM DISPATCH ---
@@ -385,6 +478,14 @@ fn main() -> anyhow::Result<()> {
                         println!("Camera blending: ENABLED");
                     } else {
                         println!("Camera blending: DISABLED");
+                    }
+                },
+                minifb::Key::Key0 => {
+                    if remote_available {
+                        use_remote = !use_remote;
+                        println!("Remote Processing: {}", if use_remote { "ENABLED" } else { "DISABLED" });
+                    } else {
+                        println!("Remote Processing Unavailable (No URL provided)");
                     }
                 },
                 minifb::Key::Space => {
@@ -632,6 +733,7 @@ fn main() -> anyhow::Result<()> {
             // --- VISUAL MENU ---
             // Updated Toggle-based Menu
             let menu_items = [
+                ("0", "Remote", use_remote && remote_available),
                 ("1", "Face Mesh", show_mesh),
                 ("2", "Head Pose", show_pose),
                 ("3", "Eye Gaze", show_gaze),

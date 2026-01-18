@@ -8,6 +8,17 @@ Rusty Eyes 3 is a high-performance webcam-based eye tracker written in Rust for 
 
 1.  **Install Dependencies**
     Ensure you have Rust installed.
+    
+    **System Dependencies (Linux)**:
+    Use the included Makefile to install required libraries (GStreamer, X11, OpenSSL).
+    
+    ```bash
+    # For Ubuntu/Debian
+    make setup-apt
+    
+    # For Fedora
+    make setup-dnf
+    ```
 
 2.  **Download Models**
     Run the setup script to download all required ONNX models to the `models/` directory:

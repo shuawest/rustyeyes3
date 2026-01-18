@@ -22,8 +22,9 @@ echo "[3/5] Generating protobuf code..."
 ssh $HOST "cd $DEPLOY_DIR && python3 -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. gaze_stream.proto"
 
 # 4. Check firewall (informational)
-echo "[4/5] Note: Ensure port 50051 is open. You may need to run:"
+echo "[4/5] Note: Ensure ports 50051 (gRPC) and 8080 (REST) are open. You may need to run:"
 echo "  ssh $HOST 'sudo ufw allow 50051/tcp'"
+echo "  ssh $HOST 'sudo ufw allow 8080/tcp'"
 
 # 5. Start server
 echo "[5/5] Starting server in background..."

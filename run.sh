@@ -11,6 +11,15 @@ if [ -f "$HOME/.cargo/env" ]; then
 fi
 
 if [ "$OS_TYPE" = "Linux" ]; then
+    # Check for GStreamer dev dependencies
+    if ! pkg-config --exists gstreamer-1.0; then
+        echo "[SETUP] Missing GStreamer dev libraries. Please run:"
+        echo "sudo apt-get update && sudo apt-get install -y libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libgstreamer-plugins-bad1.0-dev gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly gstreamer1.0-libav gstreamer1.0-tools gstreamer1.0-x gstreamer1.0-alsa gstreamer1.0-gl gstreamer1.0-gtk3 gstreamer1.0-qt5 gstreamer1.0-pulseaudio"
+        # We don't auto-run sudo for safety/interactivity reasons usually, but user is on Jetson.
+        # Let's just warn and exit if critical build deps are missing? Or try to continue?
+        # The user reported build failure, so we must fix it.
+    fi
+
     echo "[SETUP] Linux detected. Building Overlay..."
     
     # Set RUSTFLAGS to avoid linker issues on older systems (Ubuntu 18.04)
