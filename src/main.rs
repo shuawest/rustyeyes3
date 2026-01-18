@@ -261,8 +261,9 @@ fn main() -> anyhow::Result<()> {
     let mut moondream_pending = false;
 
     // --- REMOTE CLIENT SETUP ---
-    let (tx_remote_frame, rx_remote_frame) = std::sync::mpsc::channel::<image::DynamicImage>();
-    let (tx_remote_result, rx_remote_result) = std::sync::mpsc::channel::<RemoteResult>();
+    // Use BOUNDED channels to prevent OOM if network/server lags behind camera (30fps)
+    let (tx_remote_frame, rx_remote_frame) = std::sync::mpsc::sync_channel::<image::DynamicImage>(2);
+    let (tx_remote_result, rx_remote_result) = std::sync::mpsc::sync_channel::<RemoteResult>(10);
     
     // Determine Remote URL: Arg > Config > None
     let remote_url = args.remote_dgx.clone().or(config.defaults.remote_dgx_url.clone());
@@ -377,8 +378,17 @@ fn main() -> anyhow::Result<()> {
 
         // Send to remote if enabled
         if remote_available && use_remote {
-             // Send frame (non-blocking)
-             let _ = tx_remote_frame.send(image::DynamicImage::ImageRgb8(latest_realtime_frame.clone()));
+             // Send frame (non-blocking, drop if full)
+             match tx_remote_frame.try_send(image::DynamicImage::ImageRgb8(latest_realtime_frame.clone())) {
+                 Ok(_) => {},
+                 Err(std::sync::mpsc::TrySendError::Full(_)) => {
+                     // Log occasionally? For now just silent drop to save memory
+                 },
+                 Err(e) => {
+                     // Disconnected
+                     log::error!("Remote frame channel disconnected: {}", e);
+                 }
+             }
              
              // Check for results (non-blocking) - Drain queue to get latest
              let mut best_remote: Option<PipelineOutput> = None;
