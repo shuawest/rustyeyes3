@@ -14,9 +14,6 @@ use rusttype::{Font, Scale, Point, PositionedGlyph};
 #[cfg(target_os = "linux")]
 use winit::platform::x11::WindowAttributesExtX11;
 
-#[cfg(target_os = "linux")]
-use winit::platform::x11::WindowExtX11;
-
 // Custom Events from blocking stdin thread
 #[derive(Debug)]
 enum UserEvent {
@@ -239,15 +236,18 @@ impl ApplicationHandler<UserEvent> for App {
         // Additional X11 setup for input pass-through
         #[cfg(target_os = "linux")]
         {
-            use winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
+            use winit::raw_window_handle::{HasWindowHandle, HasDisplayHandle, RawWindowHandle, RawDisplayHandle};
             
             // Get X11 display and window
-            if let Ok(handle) = window.window_handle() {
-                if let RawWindowHandle::Xlib(xlib_handle) = handle.as_raw() {
+            if let (Ok(window_handle), Ok(display_handle)) = (window.window_handle(), window.display_handle()) {
+                if let (RawWindowHandle::Xlib(xlib_window), RawDisplayHandle::Xlib(xlib_display)) = 
+                    (window_handle.as_raw(), display_handle.as_raw()) 
+                {
                     unsafe {
                         use x11::xlib;
-                        let display = xlib_handle.display.as_ptr() as *mut xlib::Display;
-                        let window_id = xlib_handle.window;
+                        // Get display from the display handle
+                        let display = xlib_display.display.expect("X11 display is None").as_ptr() as *mut xlib::Display;
+                        let window_id = xlib_window.window;
                         
                         // Create an empty input region to make window fully transparent to input
                         let region = x11::xfixes::XFixesCreateRegion(display, std::ptr::null_mut(), 0);
