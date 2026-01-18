@@ -4573,6 +4573,7 @@ dependencies = [
  "clap",
  "cocoa 0.24.1",
  "colored",
+ "glib",
  "gstreamer",
  "gstreamer-app",
  "gstreamer-rtsp-server",
