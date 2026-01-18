@@ -4,19 +4,23 @@ version = "0.1.0"
 edition = "2021"
 default-run = "rusty-eyes"
 
+[features]
+default = ["onnx"]
+onnx = ["dep:ort"]
+
 [target.'cfg(any(target_os = "linux", target_os = "android"))'.dependencies]
 nokhwa = { version = "0.10", features = ["input-v4l"] }
-ort = { version = "2.0.0-rc.9", features = ["download-binaries"] }
+ort = { version = "2.0.0-rc.9", features = ["download-binaries"], optional = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 nokhwa = { version = "0.10", features = ["input-avfoundation"] }
 objc = "0.2"
 cocoa = "0.24"
-ort = { version = "2.0.0-rc.9", features = ["coreml", "download-binaries"] }
+ort = { version = "2.0.0-rc.9", features = ["coreml", "download-binaries"], optional = true }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 nokhwa = { version = "0.10", features = ["input-msmf"] }
-ort = { version = "2.0.0-rc.9", features = ["download-binaries"] }
+ort = { version = "2.0.0-rc.9", features = ["download-binaries"], optional = true }
 
 [dependencies]
 # Shared dependencies

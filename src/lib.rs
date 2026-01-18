@@ -1,11 +1,15 @@
 pub mod args;
 pub mod camera;
+#[cfg(feature = "onnx")]
 pub mod inference;
 pub mod output;
 pub mod types;
+#[cfg(feature = "onnx")]
 pub mod detector;
 pub mod pipeline;
+#[cfg(feature = "onnx")]
 pub mod head_pose;
+#[cfg(feature = "onnx")]
 pub mod gaze;
 pub mod overlay;
 pub mod moondream;
