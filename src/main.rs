@@ -430,30 +430,16 @@ fn main() -> anyhow::Result<()> {
                            let old_x = p.x;
                            let old_y = p.y;
                            
-                           // FIX: MediaPipe padded the image to square (1920x1920) if W > H.
-                           // We need to un-squash the Y coordinate.
-                           // Assuming Landscape: W=1920, H=1080. Max=1920.
-                           // Padding is (1920-1080)/2 = 420 pixels on top/bottom.
-                           // NormPad = 420 / 1920 = 0.21875.
+                           // Reverted Aspect Ratio fix: The previous logic pushed Y off-screen.
+                           // We will use raw scaling for now and inspect the "Extreme" landmarks.
+                           // p.x is normalized [0,1], p.y is normalized [0,1].
                            
-                           let dim_max = img_w.max(img_h);
-                           let dim_min = img_w.min(img_h);
-                           
-                           if img_w > img_h {
-                               // Landscape: Y is squashed
-                               let pad = (dim_max - dim_min) / 2.0 / dim_max;
-                               p.y = (p.y - pad) / (1.0 - 2.0 * pad);
-                           } else {
-                               // Portrait: X is squashed
-                               let pad = (dim_max - dim_min) / 2.0 / dim_max;
-                               p.x = (p.x - pad) / (1.0 - 2.0 * pad);
-                           }
-
                            p.x *= img_w;
                            p.y *= img_h;
                            
-                           // Debug first 3 points to verify scaling
-                           if i < 3 && remote_frame_count % 30 == 0 {
+                           // Debug widely spaced points to verify face shape
+                           // 10: Top, 152: Bottom, 234: Left Cheek, 454: Right Cheek
+                           if (i == 10 || i == 152 || i == 234 || i == 454) && remote_frame_count % 30 == 0 {
                                println!("[DEBUG] Mesh[{}]: ({:.4}, {:.4}) -> ({:.1}, {:.1}) [W={:.1}, H={:.1}]", 
                                    i, old_x, old_y, p.x, p.y, img_w, img_h);
                            }
