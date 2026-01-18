@@ -8,7 +8,7 @@ pub struct OverlayWindow {
 
 impl OverlayWindow {
     pub fn new(_width: usize, _height: usize) -> Result<Self> {
-        let process = Command::new("./overlay_app")
+        let process = Command::new("./target/release/overlay_linux")
             .stdin(Stdio::piped())
             .stdout(Stdio::null())
             .stderr(Stdio::null())
