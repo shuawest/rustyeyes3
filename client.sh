@@ -91,7 +91,6 @@ case "$1" in
         status
         ;;
     *)
-    *)
         echo "Usage: $0 {start|startnlog|stop|restart|log|status}"
         exit 1
         ;;
