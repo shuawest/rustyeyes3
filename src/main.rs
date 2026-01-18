@@ -425,9 +425,18 @@ fn main() -> anyhow::Result<()> {
                        let img_w = latest_realtime_frame.width() as f32;
                        let img_h = latest_realtime_frame.height() as f32;
                        
-                       for p in &mut mesh.points {
+                       for (i, p) in mesh.points.iter_mut().enumerate() {
+                           let old_x = p.x;
+                           let old_y = p.y;
                            p.x *= img_w;
                            p.y *= img_h;
+                           
+                           // Debug first 3 points to verify scaling
+                           if i < 3 && remote_frame_count % 30 == 0 {
+                               println!("[DEBUG] Mesh[{}]: ({:.4}, {:.4}) -> ({:.1}, {:.1}) [W={:.1}, H={:.1}]", 
+                                   i, old_x, old_y, p.x, p.y, img_w, img_h);
+                           }
+                           
                            // p.z is relative, usually keep as is or scale by width? Keep as is for now.
                        }
                   
