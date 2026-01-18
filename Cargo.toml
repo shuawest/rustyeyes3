@@ -49,3 +49,28 @@ chrono = "0.4"
 regex = "1.10"
 winit = "0.30.12"
 softbuffer = "0.4.8"
+
+# These bins require the onnx feature
+[[bin]]
+name = "calibrate"
+required-features = ["onnx"]
+
+[[bin]]
+name = "check_bins"
+required-features = ["onnx"]
+
+[[bin]]
+name = "debug_crop"
+required-features = ["onnx"]
+
+[[bin]]
+name = "analyze_multivariate"
+required-features = ["onnx"]
+
+[[bin]]
+name = "inspect_onnx"
+required-features = ["onnx"]
+
+[[bin]]
+name = "inspect_model"
+required-features = ["onnx"]
