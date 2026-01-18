@@ -21,6 +21,8 @@ enum UserEvent {
     UpdateMoondream(f32, f32),
     UpdateVerified(f32, f32),
     UpdatePending(f32, f32),
+    UpdatePending(f32, f32),
+    UpdateMesh(Vec<(f32, f32)>),
     UpdateMenu(String),
     UpdateFont(String, u32),
     Quit,
@@ -35,7 +37,9 @@ struct AppState {
     gaze_pos: Option<(f32, f32)>,
     moondream_pos: Option<(f32, f32)>,
     verified_pos: Option<(f32, f32)>,
+    verified_pos: Option<(f32, f32)>,
     pending_pos: Option<(f32, f32)>,
+    face_mesh: Option<Vec<(f32, f32)>>,
     menu_text: String,
     
     // Font State
@@ -60,6 +64,7 @@ impl AppState {
             moondream_pos: None,
             verified_pos: None,
             pending_pos: None,
+            face_mesh: None,
             menu_text: String::new(),
             font: None,
             font_size: 24.0,
@@ -154,6 +159,14 @@ impl AppState {
             if let Some((px, py)) = self.pending_pos {
                  draw_circle(px, py, 10.0, 0x0000FF00); // Green
                  draw_circle(px, py, 3.0, 0x00FF0000); // Red
+            }
+
+            // 5.5 Draw Face Mesh (White/Red dots)
+            if let Some(mesh) = &self.face_mesh {
+                 let mesh_color = 0x00FF0000; // Red for visibility
+                 for (mx, my) in mesh {
+                      draw_circle(*mx, *my, 2.0, mesh_color);
+                 }
             }
 
             // 6. Draw Menu Text
@@ -333,6 +346,7 @@ impl ApplicationHandler<UserEvent> for App {
              UserEvent::UpdateMoondream(x, y) => self.state.moondream_pos = Some((x, y)),
              UserEvent::UpdateVerified(x, y) => self.state.verified_pos = Some((x, y)),
              UserEvent::UpdatePending(x, y) => self.state.pending_pos = Some((x, y)),
+             UserEvent::UpdateMesh(points) => self.state.face_mesh = Some(points),
              UserEvent::UpdateMenu(s) => self.state.menu_text = s,
              UserEvent::UpdateFont(_f, s) => self.state.font_size = s as f32, // Ignore family for now
              UserEvent::Quit => std::process::exit(0),
@@ -377,10 +391,22 @@ fn main() -> io::Result<()> {
                         }
                     },
                      "P" => {
-                        if parts.len() >= 3 {
-                             let x = parts[1].parse().unwrap_or(0.0);
-                             let y = parts[2].parse().unwrap_or(0.0);
-                             let _ = proxy_clone.send_event(UserEvent::UpdatePending(x, y));
+                        }
+                    },
+                    "L" => {
+                        // L <count> x1 y1 x2 y2 ...
+                        if parts.len() >= 2 {
+                             let count: usize = parts[1].parse().unwrap_or(0);
+                             let mut points = Vec::with_capacity(count);
+                             // Start from index 2
+                             let mut i = 2;
+                             while i + 1 < parts.len() {
+                                 let x = parts[i].parse().unwrap_or(0.0);
+                                 let y = parts[i+1].parse().unwrap_or(0.0);
+                                 points.push((x, y));
+                                 i += 2;
+                             }
+                             let _ = proxy_clone.send_event(UserEvent::UpdateMesh(points));
                         }
                     },
                     "S" => {

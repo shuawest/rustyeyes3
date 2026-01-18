@@ -68,6 +68,25 @@ impl OverlayWindow {
         }
         Ok(())
     }
+
+    pub fn update_mesh(&mut self, points: &[(f32, f32)]) -> Result<()> {
+        if let Some(stdin) = self.process.stdin.as_mut() {
+            // L <count> x1 y1 x2 y2 ...
+            // Pre-allocate decent size string
+            let mut s = String::with_capacity(10 + points.len() * 15);
+            s.push('L');
+            s.push(' ');
+            s.push_str(&points.len().to_string());
+            for (x, y) in points {
+                s.push(' ');
+                s.push_str(&format!("{:.1}", x));
+                s.push(' ');
+                s.push_str(&format!("{:.1}", y));
+            }
+            writeln!(stdin, "{}", s)?;
+        }
+        Ok(())
+    }
 }
 
 impl Drop for OverlayWindow {

@@ -696,6 +696,23 @@ fn main() -> anyhow::Result<()> {
                             if let Some(win) = overlay_window.as_mut() {
                                 let _ = win.update_gaze(screen_x, screen_y);
                                 
+                                // Send Face Mesh if enabled
+                                if show_mesh {
+                                    if let Some(l) = &landmarks {
+                                         // Scale points to screen size?
+                                         // Camera dims: width, height. Screen dims: screen_w, screen_h.
+                                         // Only if distinct.
+                                         let sx = screen_w as f32 / width as f32;
+                                         let sy = screen_h as f32 / height as f32;
+                                         
+                                         let mesh_points: Vec<(f32, f32)> = l.points.iter().map(|p| {
+                                             (p.x * sx, p.y * sy)
+                                         }).collect();
+                                         
+                                         let _ = win.update_mesh(&mesh_points);
+                                    }
+                                }
+
                                 // Send Verified Gaze (Green/Yellow)
                                 if let Some((cx, cy)) = captured_gaze_verified {
                                     let _ = win.update_captured_onnx_verified(cx, cy);
