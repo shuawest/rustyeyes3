@@ -309,9 +309,27 @@ fn main() -> anyhow::Result<()> {
                 });
                 
                 // Receiver loop
-                while let Some(result) = grpc_rx.message().await.ok().flatten() {
-                    let res = rusty_eyes::streaming::grpc_client::proto_to_result(result);
-                    let _ = tx_res.send(res);
+                loop {
+                    match grpc_rx.message().await {
+                        Ok(Some(result)) => {
+                            let res = rusty_eyes::streaming::grpc_client::proto_to_result(result);
+                            // sync_channel send blocks, but we are in a dedicated thread for runtime, so it's okay?
+                            // Actually tx_res.send might error if receiver is dropped
+                            if let Err(e) = tx_res.send(res) {
+                                println!("Internal channel error: {}", e);
+                                break;
+                            }
+                        },
+                        Ok(None) => {
+                            println!("gRPC Stream completed by server (EOF).");
+                            break;
+                        },
+                        Err(status) => {
+                            println!("gRPC Stream Error: {:?}", status);
+                            // Should we retry connecting? For now just exit thread.
+                            break;
+                        }
+                    }
                 }
             });
         });
