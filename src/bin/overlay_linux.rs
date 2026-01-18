@@ -91,7 +91,7 @@ impl AppState {
                 for j in (0..width).step_by(100) {
                     let idx = i as usize * width as usize + j as usize;
                     if idx < buffer.len() {
-                        buffer[idx] = 0xFFFF0000; // Bright red dots (ARGB: full alpha, red)
+                        buffer[idx] = 0x00FF0000; // Red (0RGB format: 0x00|RR|GG|BB)
                     }
                 }
             }
@@ -120,30 +120,27 @@ impl AppState {
 
             // 2. Draw Gaze (Blue Dot)
             if let Some((gx, gy)) = self.gaze_pos {
-                // Blue: 0x0000FFFF (Alpha, Red, Green, Blue)? No softbuffer is usually XRGB or ARGB.
-                // Assuming ARGB. Solid Blue.
-                draw_circle(gx, gy, 15.0, 0xFF0000FF);
-                
-                // Red center
-                draw_circle(gx, gy, 5.0, 0xFFFF0000);
+                // softbuffer uses 0RGB format: 0x00|RR|GG|BB
+                draw_circle(gx, gy, 15.0, 0x000000FF); // Blue
+                draw_circle(gx, gy, 5.0, 0x00FF0000); // Red center
             }
             
             // 3. Draw Moondream (Cyan)
             if let Some((mx, my)) = self.moondream_pos {
-                 draw_circle(mx, my, 12.0, 0xFF00FFFF);
-                 draw_circle(mx, my, 4.0, 0xFFFFFF00); // Yellow center
+                 draw_circle(mx, my, 12.0, 0x0000FFFF); // Cyan
+                 draw_circle(mx, my, 4.0, 0x00FFFF00); // Yellow center
             }
             
              // 4. Draw Verified (Green/Yellow)
             if let Some((vx, vy)) = self.verified_pos {
-                 draw_circle(vx, vy, 10.0, 0xFF00FF00); // Green
-                 draw_circle(vx, vy, 3.0, 0xFFFFFF00); // Yellow
+                 draw_circle(vx, vy, 10.0, 0x0000FF00); // Green
+                 draw_circle(vx, vy, 3.0, 0x00FFFF00); // Yellow
             }
             
              // 5. Draw Pending (Green/Red)
             if let Some((px, py)) = self.pending_pos {
-                 draw_circle(px, py, 10.0, 0xFF00FF00); // Green
-                 draw_circle(px, py, 3.0, 0xFFFF0000); // Red
+                 draw_circle(px, py, 10.0, 0x0000FF00); // Green
+                 draw_circle(px, py, 3.0, 0x00FF0000); // Red
             }
 
             // 6. Draw Menu Text
@@ -180,9 +177,9 @@ impl AppState {
                                    if v > 0.5 {
                                         let px = x as i32 + bb.min.x;
                                         let py = y as i32 + bb.min.y;
-                                        if px >= 0 && px < width as i32 && py >= 0 && py < height as i32 {
+                                         if px >= 0 && px < width as i32 && py >= 0 && py < height as i32 {
                                              let idx = py as usize * width as usize + px as usize;
-                                             buffer[idx] = 0xFFFFFFFF; // White
+                                             buffer[idx] = 0x00FFFFFF; // White (0RGB)
                                         }
                                    }
                               });
