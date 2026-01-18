@@ -16,6 +16,9 @@ function start() {
 
     echo "Starting Rusty Eyes Client..."
     echo "Command: $BINARY $ARGS"
+
+    # Export DISPLAY for GUI on physical monitor (SSH)
+    export DISPLAY=:0
     
     nohup $BINARY $ARGS > "$LOG_FILE" 2>&1 &
     PID=$!
