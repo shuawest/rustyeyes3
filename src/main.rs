@@ -397,6 +397,13 @@ fn main() -> anyhow::Result<()> {
                   
                   // Convert RemoteResult to PipelineOutput
                   if let Some(mesh) = res.face_mesh {
+                       // Log Mesh Summary
+                       log::info!("[REMOTE] Received FaceMesh: {} points. Gaze: {:?}", mesh.points.len(), res.gaze);
+                       
+                       if !show_mesh {
+                           log::warn!("[REMOTE] FaceMesh received but hidden! Press '1' to toggle visibility.");
+                       }
+
                        if let Some((yaw, pitch)) = res.gaze {
                            best_remote = Some(PipelineOutput::Gaze {
                                left_eye: types::Point3D::default(),
