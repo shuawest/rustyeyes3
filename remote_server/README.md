@@ -7,6 +7,33 @@ A Python-based gRPC server for offloading heavy face mesh and gaze estimation ta
 - **Streaming**: Bidirectional gRPC streaming for low-latency video processing.
 - **Health Monitoring**: Dual-protocol health checks (gRPC standard + REST API).
 
+## Development & Versioning
+
+We follow **Semantic Versioning (SemVer)** enforced by `scripts/bump_version.sh`.
+- **Patch (x.y.Z)**: Incremented for every push/commit to main.
+- **Minor (x.Y.0)**: Incremented for new features.
+- **Major (X.0.0)**: Incremented for breaking protocol changes.
+
+To bump version:
+```bash
+# Default (Patch)
+./scripts/bump_version.sh
+# Minor
+./scripts/bump_version.sh minor
+```
+
+## Architecture
+See [Distributed Gaze Spec](../specs/distributed_gaze.md).
+
+## Troubleshooting
+
+### Client Logs
+If the client crashes or freezes, check the log file:
+- **Primary**: `client.log` (in the directory you ran the binary from)
+- **Fallback**: `/tmp/rusty-eyes.log`
+
+These logs capture startup info and critical panics.
+
 ## Setup
 
 ### Prerequisites

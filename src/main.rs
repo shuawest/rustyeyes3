@@ -71,7 +71,36 @@ fn create_pipeline(_model_type: &str, _config: &AppConfig) -> anyhow::Result<Box
 
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
+    
+    // Setup Logging
+    let log_file = std::fs::File::create("client.log").unwrap_or_else(|_| {
+        std::fs::File::create("/tmp/rusty-eyes.log").expect("Failed to create log file")
+    });
+    
+    let _ = simplelog::WriteLogger::init(
+        simplelog::LevelFilter::Info,
+        simplelog::Config::default(),
+        log_file
+    );
+    
+    // Panic Hook
+    std::panic::set_hook(Box::new(|info| {
+        let msg = match info.payload().downcast_ref::<&str>() {
+            Some(s) => *s,
+            None => match info.payload().downcast_ref::<String>() {
+                Some(s) => &**s,
+                None => "Box<Any>",
+            },
+        };
+        let location = info.location().map(|l| format!("{}:{}", l.file(), l.line())).unwrap_or_else(|| "unknown".to_string());
+        let err_msg = format!("CRITICAL PANIC at {}: {}", location, msg);
+        
+        eprintln!("{}", err_msg);
+        log::error!("{}", err_msg);
+    }));
+
     println!("Rusty Eyes Client v{}", env!("CARGO_PKG_VERSION"));
+    log::info!("Starting Rusty Eyes Client v{}", env!("CARGO_PKG_VERSION"));
 
     if args.list {
         let cameras = nokhwa::query(nokhwa::utils::ApiBackend::Auto)?;
