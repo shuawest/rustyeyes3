@@ -264,8 +264,9 @@ fn main() -> anyhow::Result<()> {
 
     // --- REMOTE CLIENT SETUP ---
     // Use BOUNDED channels to prevent OOM if network/server lags behind camera (30fps)
-    let (tx_remote_frame, rx_remote_frame) = std::sync::mpsc::sync_channel::<image::DynamicImage>(2);
-    let (tx_remote_result, rx_remote_result) = std::sync::mpsc::sync_channel::<RemoteResult>(10);
+    // Use BOUNDED channels to prevent OOM. Size 1 forces "real-time or drop" behavior to prevent bursts.
+    let (tx_remote_frame, rx_remote_frame) = std::sync::mpsc::sync_channel::<image::DynamicImage>(1);
+    let (tx_remote_result, rx_remote_result) = std::sync::mpsc::sync_channel::<RemoteResult>(1);
     
     // Determine Remote URL: Arg > Config > None
     let remote_url = args.remote_dgx.clone().or(config.defaults.remote_dgx_url.clone());
@@ -428,6 +429,26 @@ fn main() -> anyhow::Result<()> {
                        for (i, p) in mesh.points.iter_mut().enumerate() {
                            let old_x = p.x;
                            let old_y = p.y;
+                           
+                           // FIX: MediaPipe padded the image to square (1920x1920) if W > H.
+                           // We need to un-squash the Y coordinate.
+                           // Assuming Landscape: W=1920, H=1080. Max=1920.
+                           // Padding is (1920-1080)/2 = 420 pixels on top/bottom.
+                           // NormPad = 420 / 1920 = 0.21875.
+                           
+                           let dim_max = img_w.max(img_h);
+                           let dim_min = img_w.min(img_h);
+                           
+                           if img_w > img_h {
+                               // Landscape: Y is squashed
+                               let pad = (dim_max - dim_min) / 2.0 / dim_max;
+                               p.y = (p.y - pad) / (1.0 - 2.0 * pad);
+                           } else {
+                               // Portrait: X is squashed
+                               let pad = (dim_max - dim_min) / 2.0 / dim_max;
+                               p.x = (p.x - pad) / (1.0 - 2.0 * pad);
+                           }
+
                            p.x *= img_w;
                            p.y *= img_h;
                            
