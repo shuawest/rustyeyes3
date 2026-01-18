@@ -28,14 +28,16 @@ echo "  ssh $HOST 'sudo ufw allow 8080/tcp'"
 
 # 5. Start server
 echo "[5/5] Starting server in background..."
-# Kill existing instance if any
-ssh $HOST "pkill -f 'python3 server.py' || true"
-# Start new instance
-ssh $HOST "cd $DEPLOY_DIR && nohup python3 server.py > server.log 2>&1 &"
+# Start new instance via tmux for persistence
+echo "Starting tmux session 'gaze_server'..."
+ssh $HOST "tmux kill-session -t gaze_server || true"
+ssh $HOST "cd $DEPLOY_DIR && tmux new-session -d -s gaze_server 'python3 server.py > server.log 2>&1'"
 
 echo ""
 echo "=== Deployment Complete ==="
-echo "Server running on: jowestdgxe:50051"
+echo "Server running on: jowestdgxe:50051 (in tmux session 'gaze_server')"
 echo ""
 echo "View logs:"
 echo "  ssh $HOST 'tail -f $DEPLOY_DIR/server.log'"
+echo "Attach to console:"
+echo "  ssh $HOST 'tmux attach -t gaze_server'"

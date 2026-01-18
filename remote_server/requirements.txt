@@ -1,5 +1,6 @@
 grpcio
 grpcio-tools
+grpcio-health-checking
 opencv-python-headless
 mediapipe
 numpy

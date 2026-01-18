@@ -33,7 +33,6 @@ class GazeStreamService(gaze_stream_pb2_grpc.GazeStreamServiceServicer):
             min_detection_confidence=0.5,
             min_tracking_confidence=0.5
         )
-        )
         print("[SERVER] MediaPipe FaceMesh initialized")
         self.health_status = health_pb2.HealthCheckResponse.SERVING
         self.total_frames_processed = 0
