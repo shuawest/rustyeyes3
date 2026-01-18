@@ -100,6 +100,21 @@ case "$1" in
     stop)
         stop
         ;;
+    check-build)
+        if pgrep -f "cargo build" > /dev/null; then
+            echo "Build is RUNNING"
+            pgrep -fl "cargo build"
+        else
+            echo "Build is NOT running"
+        fi
+        ;;
+    kill)
+        echo "Force killing all client processes..."
+        pkill -9 -f "rusty-eyes" || echo "No rusty-eyes process found"
+        pkill -9 -f "overlay_linux" || echo "No overlay_linux process found"
+        rm -f "$PID_FILE"
+        echo "Done."
+        ;;
     restart)
         stop
         sleep 1
@@ -111,6 +126,10 @@ case "$1" in
     status)
         status
         ;;
+    build-log)
+        echo "Tailing build log..."
+        tail -f build.log
+        ;;
     version)
         $BINARY --version
         ;;
@@ -118,7 +137,7 @@ case "$1" in
         completion
         ;;
     *)
-        echo "Usage: $0 {start|startnlog|stop|restart|log|status|version|completion}"
+        echo "Usage: $0 {start|startnlog|stop|kill|restart|log|status|check-build|build-log|version|completion}"
         exit 1
         ;;
 esac

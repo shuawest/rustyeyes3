@@ -105,7 +105,9 @@ pub fn frame_to_proto(
     let dyn_imgs = image::DynamicImage::ImageRgb8(frame.clone());
     
     // Attempt JPEG encoding
-    let _ = dyn_imgs.write_to(&mut std::io::Cursor::new(&mut buf), image::ImageFormat::Jpeg);
+    // Quality 50 is sufficient for face mesh and reduces size significantly vs default 75
+    let mut encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut buf, 50);
+    let _ = encoder.encode_image(&dyn_imgs);
 
     // Convert to microrsecond timestamp
     let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_micros() as i64;

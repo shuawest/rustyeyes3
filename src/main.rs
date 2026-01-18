@@ -151,7 +151,7 @@ fn main() -> anyhow::Result<()> {
     let width = camera.width();
     let height = camera.height();
     let mut window = WindowOutput::new("Rusty Eyes", width as usize, height as usize)?; // Added ?
-    println!("Window created successfully.");
+    println!("Window created successfully (Native Res: {}x{}).", width, height);
 
     // Setup Calibration Manager
     let mut calibration_manager = CalibrationManager::new("calibration_data")?;
@@ -402,7 +402,16 @@ fn main() -> anyhow::Result<()> {
              remote_frame_count += 1;
              // Send frame (non-blocking, drop if full) - TRY FULL FPS
              if remote_frame_count % 1 == 0 {
-                 match tx_remote_frame.try_send(image::DynamicImage::ImageRgb8(latest_realtime_frame.clone())) {
+                 // Downscale for network efficiency (Fixes Upload Latency)
+                 let scaled_frame = image::imageops::resize(
+                     &latest_realtime_frame, 
+                     640, 
+                     480, 
+                     image::imageops::FilterType::Triangle
+                 );
+                 let frame_to_send = image::imageops::grayscale(&scaled_frame);
+                 
+                 match tx_remote_frame.try_send(image::DynamicImage::ImageLuma8(frame_to_send)) {
                      Ok(_) => {},
                      Err(std::sync::mpsc::TrySendError::Full(_)) => {
                          // Dropped frame

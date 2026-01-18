@@ -54,6 +54,6 @@ echo "Deploying to Server (jowestdgxe)..."
 
 # 6. Trigger Client Build
 echo "Triggering Client Build (jetsone)..."
-ssh jetsone "cd ~/dev/repos/rustyeyes3 && git pull && ~/.cargo/bin/cargo build --release --no-default-features"
+ssh jetsone "cd ~/dev/repos/rustyeyes3 && git pull && ~/.cargo/bin/cargo build --release --no-default-features | tee build.log"
 
 echo "Release v$NEW_VERSION completed successfully!"
