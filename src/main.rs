@@ -249,6 +249,8 @@ fn main() -> anyhow::Result<()> {
 
     // 4. Loop
     let mut last_pipeline_output: Option<PipelineOutput> = None;
+    let mut last_valid_remote_output: Option<PipelineOutput> = None;
+    let mut remote_frame_count: u64 = 0;
     
     // Feature Toggles (Loaded from Config)
     let mut show_mesh = config.defaults.show_mesh;
@@ -396,15 +398,18 @@ fn main() -> anyhow::Result<()> {
 
         // Send to remote if enabled
         if remote_available && use_remote {
-             // Send frame (non-blocking, drop if full)
-             match tx_remote_frame.try_send(image::DynamicImage::ImageRgb8(latest_realtime_frame.clone())) {
-                 Ok(_) => {},
-                 Err(std::sync::mpsc::TrySendError::Full(_)) => {
-                     // Log occasionally? For now just silent drop to save memory
-                 },
-                 Err(e) => {
-                     // Disconnected
-                     log::error!("Remote frame channel disconnected: {}", e);
+             remote_frame_count += 1;
+             // Send frame (non-blocking, drop if full) - LIMIT TO ~10FPS (Send every 3rd frame)
+             if remote_frame_count % 3 == 0 {
+                 match tx_remote_frame.try_send(image::DynamicImage::ImageRgb8(latest_realtime_frame.clone())) {
+                     Ok(_) => {},
+                     Err(std::sync::mpsc::TrySendError::Full(_)) => {
+                         // Log occasionally? For now just silent drop to save memory
+                     },
+                     Err(e) => {
+                         // Disconnected
+                         log::error!("Remote frame channel disconnected: {}", e);
+                     }
                  }
              }
              
@@ -443,8 +448,13 @@ fn main() -> anyhow::Result<()> {
              }
              
              // Override local output if we have a fresh remote result
+             // Override local output if we have a fresh remote result
              if let Some(remote_out) = best_remote {
+                 last_valid_remote_output = Some(remote_out.clone());
                  output = Some(remote_out);
+             } else if let Some(last_remote) = &last_valid_remote_output {
+                 // Persist the last known mesh so it doesn't flicker
+                 output = Some(last_remote.clone());
              }
         }
         
