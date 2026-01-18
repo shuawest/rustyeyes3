@@ -1,6 +1,6 @@
 [package]
 name = "rusty-eyes"
-version = "0.2.27"
+version = "0.2.28"
 edition = "2021"
 default-run = "rusty-eyes"
 

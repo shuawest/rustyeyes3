@@ -397,65 +397,54 @@ fn main() -> anyhow::Result<()> {
         // This ensures consistent behavior even if remote fails
         let mut output = pipeline.process(&latest_realtime_frame)?;
 
-        // Send to remote if enabled
+                // Send to remote if enabled
         if remote_available && use_remote {
              remote_frame_count += 1;
-             // Send frame (non-blocking, drop if full) - LIMIT TO ~10FPS (Send every 3rd frame)
-             if remote_frame_count % 3 == 0 {
+             // Send frame (non-blocking, drop if full) - TRY FULL FPS
+             if remote_frame_count % 1 == 0 {
                  match tx_remote_frame.try_send(image::DynamicImage::ImageRgb8(latest_realtime_frame.clone())) {
                      Ok(_) => {},
                      Err(std::sync::mpsc::TrySendError::Full(_)) => {
-                         // Log occasionally? For now just silent drop to save memory
+                         // Dropped frame
                      },
                      Err(e) => {
-                         // Disconnected
                          log::error!("Remote frame channel disconnected: {}", e);
                      }
                  }
              }
-                          // Check for results (non-blocking) - Drain queue to get latest
+                          // Check for results
                 let mut best_remote: Option<PipelineOutput> = None;
                 while let Ok(res) = rx_remote_result.try_recv() {
                      last_remote_ts = std::time::Instant::now();
                      
                      // Convert RemoteResult to PipelineOutput
                      if let Some(mut mesh) = res.face_mesh {
-                          // CRITICAL FIX: MediaPipe returns normalized [0,1] landmarks relative to detected face region
-                          // We must apply face_box offset and scale to position them correctly in full frame
                           let img_w = latest_realtime_frame.width() as f32;
                           let img_h = latest_realtime_frame.height() as f32;
                           
-                          // Get face bounding box (default to full frame if not provided)
-                          let (bbox_x, bbox_y, bbox_w, bbox_h) = if let Some(bbox) = res.face_box {
-                              (bbox.x * img_w, bbox.y * img_h, bbox.width * img_w, bbox.height * img_h)
-                          } else {
-                              // Fallback: assume landmarks are already in image coordinates
-                              (0.0, 0.0, img_w, img_h)
-                          };
+                          // Landmarks are normalized [0,1] relative to the processed image
+                          // Revert scaling fix: Assume direct mapping to full screen
                           
                           for (i, p) in mesh.points.iter_mut().enumerate() {
+                              // Just scale to image dimensions
                               let old_x = p.x;
                               let old_y = p.y;
                               
-                              // Landmarks are normalized [0,1] within the face_box
-                              // Transform: normalized -> face_box coords -> image coords
-                              p.x = bbox_x + (p.x * bbox_w);
-                              p.y = bbox_y + (p.y * bbox_h);
+                              p.x = p.x * img_w;
+                              p.y = p.y * img_h;
                               
-                              // Debug widely spaced points to verify face shape
-                              // 10: Top, 152: Bottom, 234: Left Cheek, 454: Right Cheek
-                              if (i == 10 || i == 152 || i == 234 || i == 454) && remote_frame_count % 30 == 0 {
-                                  println!("[DEBUG] Mesh[{}]: ({:.4}, {:.4}) -> ({:.1}, {:.1}) [BBox: {:.1},{:.1} {}x{}]", 
-                                      i, old_x, old_y, p.x, p.y, bbox_x, bbox_y, bbox_w as i32, bbox_h as i32);
+                              // Log debug sample
+                              if (i == 10 || i == 152) && remote_frame_count % 30 == 0 {
+                                  println!("[DEBUG] Mesh[{}]: ({:.4}, {:.4}) -> ({:.1}, {:.1})", 
+                                      i, old_x, old_y, p.x, p.y);
                               }
-                              
-                              // p.z is relative depth, keep as is
                           }
                   
-                       // Log Mesh Summary
                        let msg = format!("[REMOTE] Received FaceMesh: {} points. Gaze: {:?}", mesh.points.len(), res.gaze);
-                       log::info!("{}", msg);
-                       println!("{}", msg); // Print to console for user visibility
+                       if remote_frame_count % 60 == 0 {
+                            log::info!("{}", msg);
+                            println!("{}", msg);
+                       }
                        
                        if !show_mesh {
                            let warn = "[REMOTE] FaceMesh received but hidden! Press '1' to toggle visibility.";
