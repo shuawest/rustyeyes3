@@ -1,0 +1,28 @@
+# Simple DeepStream Test Configuration
+# config_test_simple.txt
+# Tests basic UDP source → decode → display pipeline
+
+[application]
+enable-perf-measurement=1
+perf-measurement-interval-sec=5
+
+[source0]
+enable=1
+type=4  # UDP
+uri=udp://0.0.0.0:5004
+num-sources=1
+gpu-id=0
+
+[streammux]
+gpu-id=0
+batch-size=1
+batched-push-timeout=40000
+width=1280
+height=720
+enable-padding=0
+nvbuf-memory-type=0
+
+[sink0]
+enable=1
+type=3  # Fake sink (headless test)
+sync=0
