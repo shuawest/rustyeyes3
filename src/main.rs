@@ -417,13 +417,16 @@ fn main() -> anyhow::Result<()> {
                 while let Ok(res) = rx_remote_result.try_recv() {
                      last_remote_ts = std::time::Instant::now();
                      
-                     // Convert RemoteResult to PipelineOutput
+                      // Convert RemoteResult to PipelineOutput
                      if let Some(mut mesh) = res.face_mesh {
-                          let img_w = latest_realtime_frame.width() as f32;
-                          let img_h = latest_realtime_frame.height() as f32;
+                          // Scale to WINDOW dimensions (Screen Size), not Camera Frame size
+                          // This ensures the overlay matches the displayed video size
+                          let (win_w, win_h) = window.get_size();
+                          let img_w = win_w as f32;
+                          let img_h = win_h as f32;
                           
-                          // Landmarks are normalized [0,1] relative to the processed image
-                          // Revert scaling fix: Assume direct mapping to full screen
+                          // Landmarks are normalized [0,1]
+                          // Scale to screen/window pixels
                           
                           for (i, p) in mesh.points.iter_mut().enumerate() {
                               // Just scale to image dimensions
