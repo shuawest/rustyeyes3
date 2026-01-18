@@ -85,10 +85,22 @@ fn main() -> anyhow::Result<()> {
     // 0. Load Config
     let config = AppConfig::load()?;
 
-    // 1. Setup Camera
+    // 1. Setup Cameras
     let index = args.cam_index as usize;
     let mut camera = CameraSource::new(index)?;
-    println!("Opened camera: {}", camera.name());
+    println!("Opened camera 1: {}", camera.name());
+    
+    // Try to open second camera (index + 1)
+    let mut camera2 = match CameraSource::new(index + 1) {
+        Ok(cam) => {
+            println!("Opened camera 2: {}", cam.name());
+            Some(cam)
+        }
+        Err(e) => {
+            println!("[INFO] Only one camera available: {}", e);
+            None
+        }
+    };
 
     // 2. Setup Inference
     let mut active_model_index = 0;
@@ -213,6 +225,7 @@ fn main() -> anyhow::Result<()> {
     let mut show_gaze = config.defaults.show_gaze;
     let mut mirror_mode = config.defaults.mirror_mode;
     let mut show_overlay = config.defaults.show_overlay;
+    let mut blend_cameras = false; // Default: off, toggle with Key8
     
     let mut moondream_pending = false;
 
@@ -237,17 +250,26 @@ fn main() -> anyhow::Result<()> {
         }
 
         // --- CAMERA CAPTURE ---
-        // Capture newest frame. 
-        // If we have a paused_frame (from Spacebar freeze), use that? No, calibration freeze is separate.
-        // We always run realtime pipeline.
+        // Capture from both cameras and blend if second camera exists
         
-        // Non-blocking capture
         let latest_realtime_frame = if let Ok(mut cam_frame) = camera.capture() {
-             // Mirror if enabled (Standard Webcam Behavior)
-             // CRITICAL: This physical flip is required for the user to see themselves as a mirror.
-             // DO NOT REMOVE. Regression Risk: Local Logic.
-             if mirror_mode {
-                 image::imageops::flip_horizontal_in_place(&mut cam_frame);
+            // If we have a second camera and blending is enabled, blend the frames
+            if blend_cameras {
+                if let Some(ref mut cam2) = camera2 {
+                    if let Ok(frame2) = cam2.capture() {
+                        // Alpha blend: 50% camera1 + 50% camera2
+                        for (pixel1, pixel2) in cam_frame.pixels_mut().zip(frame2.pixels()) {
+                            pixel1[0] = (pixel1[0] / 2).saturating_add(pixel2[0] / 2);
+                            pixel1[1] = (pixel1[1] / 2).saturating_add(pixel2[1] / 2);
+                            pixel1[2] = (pixel1[2] / 2).saturating_add(pixel2[2] / 2);
+                        }
+                    }
+                }
+            }
+            
+            // Mirror if enabled
+            if mirror_mode {
+                image::imageops::flip_horizontal_in_place(&mut cam_frame);
              }
              cam_frame
         } else {
@@ -355,6 +377,14 @@ fn main() -> anyhow::Result<()> {
                         captured_gaze_verified = None; // start fresh
                         captured_gaze_pending = None;
                         moondream_result = None;
+                    }
+                },
+                minifb::Key::Key8 => {
+                    blend_cameras = !blend_cameras;
+                    if blend_cameras && camera2.is_some() {
+                        println!("Camera blending: ENABLED");
+                    } else {
+                        println!("Camera blending: DISABLED");
                     }
                 },
                 minifb::Key::Space => {
