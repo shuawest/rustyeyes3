@@ -93,8 +93,11 @@ case "$1" in
     status)
         status
         ;;
+    version)
+        $BINARY --version
+        ;;
     *)
-        echo "Usage: $0 {start|startnlog|stop|restart|log|status}"
+        echo "Usage: $0 {start|startnlog|stop|restart|log|status|version}"
         exit 1
         ;;
 esac
