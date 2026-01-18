@@ -25,7 +25,7 @@ from grpc_health.v1 import health_pb2
 from grpc_health.v1 import health_pb2_grpc
 
 
-VERSION = "0.2.19"
+VERSION = "0.2.20"
 
 class StreamManager:
     """Manages Pub/Sub for gaze streams"""
@@ -167,11 +167,11 @@ class GazeStreamService(gaze_stream_pb2_grpc.GazeStreamServiceServicer):
                 if frame_count % 30 == 0:
                     print(f"[SERVER] Processed {frame_count} frames, detected face with {len(result.landmarks)} landmarks")
             
-            # 1. Publish to subscribers (Broadcast)
-            stream_manager.publish(video_frame.stream_id, result)
+                # 1. Publish to subscribers (Broadcast)
+                stream_manager.publish(video_frame.stream_id, result)
 
-            # 2. Yield result back to the source client (Unicast)
-            yield result
+                # 2. Yield result back to the source client (Unicast)
+                yield result
         
         except Exception as e:
             print(f"[SERVER] Error processing stream: {e}")
