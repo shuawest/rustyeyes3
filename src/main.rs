@@ -639,6 +639,7 @@ fn main() -> anyhow::Result<()> {
                 ("5", "Mirror", mirror_mode),
                 ("6", "Overlay", show_overlay),
                 ("7", "Moondream", moondream_active),
+                ("8", "Blend", blend_cameras && camera2.is_some()),
                 ("9", "Calibration", calibration_mode),
             ];
             
