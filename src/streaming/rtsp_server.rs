@@ -7,6 +7,8 @@ use gstreamer_app as gst_app;
 use gstreamer_rtsp_server as gst_rtsp;
 #[cfg(target_os = "linux")]
 use gstreamer_rtsp_server::prelude::*;
+#[cfg(target_os = "linux")]
+use glib;
 
 #[cfg(target_os = "linux")]
 pub struct CameraStreamServer {

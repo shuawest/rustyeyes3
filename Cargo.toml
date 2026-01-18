@@ -63,6 +63,7 @@ gstreamer = { version = "0.18", features = ["v1_14"] }
 gstreamer-app = "0.18"
 gstreamer-video = "0.18"
 gstreamer-rtsp-server = "0.18"
+glib = "0.15"
 
 
 # These bins require the onnx feature
