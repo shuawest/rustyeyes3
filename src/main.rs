@@ -465,11 +465,11 @@ fn main() -> anyhow::Result<()> {
                                 pitch,
                                 roll: 0.0,
                                 vector: types::Point3D::default(),
-                                landmarks: Some(Landmarks { points: composite_points }),
+                                landmarks: Some(types::Landmarks { points: composite_points }),
                             });
                          } else {
                             // Landmarks only
-                            best_remote = Some(PipelineOutput::Landmarks(Landmarks { points: composite_points }));
+                            best_remote = Some(PipelineOutput::Landmarks(types::Landmarks { points: composite_points }));
                          }
                      }
                 }
