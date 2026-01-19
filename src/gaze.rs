@@ -561,7 +561,7 @@ impl Pipeline for L2CSPipeline {
             // SVR Inference (if models loaded)
             let (y_gained, p_gained) =
                 if let (Some(svr_x), Some(svr_y)) = (&self.svr_x, &self.svr_y) {
-                    let feat = DenseMatrix::from_2d_vec(&vec![vec![y_raw as f64, p_raw as f64]]);
+                    let feat = DenseMatrix::from_2d_vec(&vec![vec![y_raw as f64, p_raw as f64]]).unwrap();
                     let px = svr_x.predict(&feat).unwrap_or(vec![0.0])[0] as f32;
                     let py = svr_y.predict(&feat).unwrap_or(vec![0.0])[0] as f32;
                     (px, py)
