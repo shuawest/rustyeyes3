@@ -16,10 +16,14 @@ pub struct GazeStreamClient {
     client: proto::gaze_stream_service_client::GazeStreamServiceClient<Channel>,
 }
 
+pub struct RemoteFace {
+    pub landmarks: Landmarks,
+    pub face_box: Option<Rect>,
+    pub gaze: Option<(f32, f32)>,
+}
+
 pub struct RemoteResult {
-    pub face_mesh: Option<Landmarks>,
-    pub face_box: Option<Rect>,  // Bounding box for face region
-    pub gaze: Option<(f32, f32)>, // yaw, pitch
+    pub faces: Vec<RemoteFace>,
     pub timestamp: u64,
     pub stream_id: String,
     pub trace_timestamps: std::collections::HashMap<String, i64>,
@@ -128,40 +132,74 @@ pub fn frame_to_proto(
     }
 }
 
+pub fn frame_to_proto_gray(
+    frame: &image::ImageBuffer<image::Luma<u8>, Vec<u8>>, 
+    timestamp_us: i64, 
+    stream_id: &str
+) -> proto::VideoFrame {
+    let mut buf = Vec::new();
+    let dyn_imgs = image::DynamicImage::ImageLuma8(frame.clone());
+    
+    // Quality 50 is sufficient for face mesh and reduces size significantly
+    let mut encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut buf, 50);
+    let _ = encoder.encode_image(&dyn_imgs);
+
+    // Convert to microrsecond timestamp
+    // We reuse the same timestamp logic
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_micros() as i64;
+    let mut stamps = std::collections::HashMap::new();
+    stamps.insert("client_send".to_string(), now);
+
+    proto::VideoFrame {
+        frame_data: buf,
+        timestamp_us,
+        width: frame.width() as i32,
+        height: frame.height() as i32,
+        stream_id: stream_id.to_string(),
+        trace_timestamps: stamps,
+    }
+}
+
 // Helper to convert Proto Result to internal RemoteResult
 pub fn proto_to_result(proto_res: proto::FaceMeshResult) -> RemoteResult {
-    let mut landmarks = None;
+    let mut faces = Vec::new();
     
-    if !proto_res.landmarks.is_empty() {
-        let points: Vec<Point3D> = proto_res.landmarks.iter().map(|lm| Point3D {
+    for face in proto_res.faces {
+        let points: Vec<Point3D> = face.landmarks.iter().map(|lm| Point3D {
             x: lm.x,
             y: lm.y,
             z: lm.z,
         }).collect();
-        landmarks = Some(Landmarks { points });
+        
+        let face_box = if let Some(bbox) = face.face_box {
+            Some(Rect {
+                x: bbox.x,
+                y: bbox.y,
+                width: bbox.width,
+                height: bbox.height,
+            })
+        } else {
+            None
+        };
+
+        let gaze = if let Some(g) = face.gaze {
+            Some((g.yaw, g.pitch))
+        } else {
+            None
+        };
+        
+        faces.push(RemoteFace {
+            landmarks: Landmarks { points },
+            face_box,
+            gaze
+        });
     }
-    
-    let face_box = if let Some(bbox) = proto_res.face_box {
-        Some(Rect {
-            x: bbox.x,
-            y: bbox.y,
-            width: bbox.width,
-            height: bbox.height,
-        })
-    } else {
-        None
-    };
-    
-    let gaze = if let Some(g) = proto_res.gaze {
-        Some((g.yaw, g.pitch))
-    } else {
-        None
-    };
+
+    // Backwards compatibility for old server logic (if needed, but we upgraded both)
+    // If faces is empty but landmarks exists (old proto)? No, proto changed field name.
     
     RemoteResult {
-        face_mesh: landmarks,
-        face_box,
-        gaze,
+        faces,
         timestamp: proto_res.timestamp_us as u64,
         stream_id: proto_res.stream_id,
         trace_timestamps: proto_res.trace_timestamps,

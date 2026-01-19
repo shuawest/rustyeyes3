@@ -130,6 +130,12 @@ case "$1" in
         echo "Tailing build log..."
         tail -f build.log
         ;;
+    build)
+        echo "Starting Build..."
+        # Capture both stdout and stderr to build.log
+        ~/.cargo/bin/cargo build --release --no-default-features > build.log 2>&1
+        echo "Build Complete. Check build.log for details."
+        ;;
     version)
         $BINARY --version
         ;;

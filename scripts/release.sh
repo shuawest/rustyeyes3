@@ -41,7 +41,8 @@ sed -i '' "s/VERSION = \".*\"/VERSION = \"$NEW_VERSION\"/" $SERVER_PY
 echo "Files updated."
 
 # 4. Git Operations
-git add $CARGO_TOML $SERVER_PY
+# 4. Git Operations
+git add -u  # Add all tracked files (including src changes)
 git commit -m "Release v$NEW_VERSION: $MSG"
 git tag "v$NEW_VERSION"
 git push origin main --tags
@@ -54,6 +55,7 @@ echo "Deploying to Server (jowestdgxe)..."
 
 # 6. Trigger Client Build
 echo "Triggering Client Build (jetsone)..."
-ssh jetsone "cd ~/dev/repos/rustyeyes3 && git pull && ~/.cargo/bin/cargo build --release --no-default-features | tee build.log"
+# Use client.sh to ensure environment variables (like DISPLAY) and logging are consistent
+ssh jetsone "cd ~/dev/repos/rustyeyes3 && git pull && ./client.sh build"
 
 echo "Release v$NEW_VERSION completed successfully!"

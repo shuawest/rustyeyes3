@@ -4592,7 +4592,7 @@ checksum = "b39cdef0fa800fc44525c84ccb54a029961a8215f9619753635a9c0d2538d46d"
 
 [[package]]
 name = "rusty-eyes"
-version = "0.2.26"
+version = "0.2.39"
 dependencies = [
  "anyhow",
  "bincode",

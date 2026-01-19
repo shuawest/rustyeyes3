@@ -258,7 +258,7 @@ fn main() -> anyhow::Result<()> {
     let mut show_gaze = config.defaults.show_gaze;
     let mut mirror_mode = config.defaults.mirror_mode;
     let mut show_overlay = config.defaults.show_overlay;
-    let mut blend_cameras = false; // Default: off, toggle with Key8
+    let mut blend_cameras = true; // Default: ON (User Request)
     
     let mut moondream_pending = false;
 
@@ -450,83 +450,67 @@ fn main() -> anyhow::Result<()> {
                      last_remote_ts = std::time::Instant::now();
                      
                       // Convert RemoteResult to PipelineOutput
-                     if let Some(mut mesh) = res.face_mesh {
-                          // Scale to WINDOW dimensions (Screen Size), not Camera Frame size
-                          // This ensures the overlay matches the displayed video size
-                          let (win_w, win_h) = window.get_size();
-                          let img_w = win_w as f32;
-                          let img_h = win_h as f32;
+                          // Multi-Face Support: Iterate all faces
+                          let mut all_landmarks = Vec::new(); // For local pipeline output
                           
-                          // Landmarks are normalized [0,1]
-                          // Scale to screen/window pixels
-                          
-                          for (i, p) in mesh.points.iter_mut().enumerate() {
-                              // Just scale to image dimensions
-                              let old_x = p.x;
-                              let old_y = p.y;
-                              
-                              p.x = p.x * img_w;
-                              p.y = p.y * img_h;
-                              
-                              // Log debug sample
-                              if (i == 10 || i == 152) && remote_frame_count % 30 == 0 {
-                                  println!("[DEBUG] Mesh[{}]: ({:.4}, {:.4}) -> ({:.1}, {:.1})", 
-                                      i, old_x, old_y, p.x, p.y);
+                          for face in res.faces.iter_mut() {
+                              // Scale landmarks
+                              for (i, p) in face.landmarks.points.iter_mut().enumerate() {
+                                   let old_x = p.x;
+                                   let old_y = p.y;
+                                   p.x = p.x * img_w;
+                                   p.y = p.y * img_h;
                               }
+                              all_landmarks.push(face.landmarks.clone());
                           }
-                  
-                       let msg = format!("[REMOTE] Received FaceMesh: {} points. Gaze: {:?}", mesh.points.len(), res.gaze);
-                       if remote_frame_count % 60 == 0 {
-                            log::info!("{}", msg);
-                            println!("{}", msg);
-                       }
-                       
-                       // --- LATENCY TRACING ---
-                       // Calculate breakdowns
-                       let now_us = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_micros() as i64;
-                       
-                       if let Some(t_send) = res.trace_timestamps.get("client_send") {
-                           let total_rtt = now_us - t_send;
-                           
-                           let t_serv_recv = res.trace_timestamps.get("server_recv").unwrap_or(&0);
-                           let t_serv_end = res.trace_timestamps.get("server_proc_end").unwrap_or(&0);
-                           
-                           if *t_serv_recv > 0 && *t_serv_end > 0 {
-                               let upload = t_serv_recv - t_send;
-                               let inference = t_serv_end - t_serv_recv;
-                               let download = now_us - t_serv_end;
-                               
-                               if remote_frame_count % 10 == 0 { // Log every 10th frame to avoid flood but see patterns
-                                   let log_msg = format!("[LATENCY] Total: {}ms | Upload: {}ms | Infer: {}ms | Download: {}ms", 
-                                       total_rtt / 1000, 
-                                       upload / 1000, 
-                                       inference / 1000, 
-                                       download / 1000);
+                          
+                          let face_count = res.faces.len();
+                          let msg = format!("[REMOTE] Received {} Faces.", face_count);
+                          if remote_frame_count % 60 == 0 {
+                               log::info!("{}", msg);
+                               println!("{}", msg);
+                          }
+                          
+                           // --- LATENCY TRACING ---
+                           let now_us = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_micros() as i64;
+                           if let Some(t_send) = res.trace_timestamps.get("client_send") {
+                               let total_rtt = now_us - t_send;
+                               if remote_frame_count % 10 == 0 { 
+                                   let log_msg = format!("[LATENCY] Total: {}ms", total_rtt / 1000);
                                    println!("{}", log_msg);
                                    log::info!("{}", log_msg);
                                }
                            }
-                       }
-                       
-                       if !show_mesh {
-                           let warn = "[REMOTE] FaceMesh received but hidden! Press '1' to toggle visibility.";
-                           log::warn!("{}", warn);
-                           println!("{}", warn);
-                       }
-
-                       if let Some((yaw, pitch)) = res.gaze {
-                           best_remote = Some(PipelineOutput::Gaze {
-                               left_eye: types::Point3D::default(),
-                               right_eye: types::Point3D::default(),
-                               yaw,
-                               pitch,
-                               roll: 0.0,
-                               vector: types::Point3D::default(),
-                               landmarks: Some(mesh),
-                           });
-                       } else {
-                           best_remote = Some(PipelineOutput::Landmarks(mesh));
-                       }
+                           
+                           // Determine "Best" result for output
+                           // If multiple faces, we might need a MultiFace enum in PipelineOutput, 
+                           // but for now let's just use the FIRST face for Gaze/Mesh 
+                           // OR construct a composite?
+                           // Existing PipelineOutput::Landmarks only holds one.
+                           // Need to update PipelineOutput? Or just hack it to concat?
+                           
+                           // HACK: Concat all points into one Landmarks struct for rendering
+                           let mut composite_points = Vec::new();
+                           for face in res.faces.iter() {
+                               composite_points.extend(face.landmarks.points.clone());
+                           }
+                           
+                           // If we have at least one face, use its gaze?
+                           if let Some(first_face) = res.faces.first() {
+                                if let Some((yaw, pitch)) = first_face.gaze {
+                                   best_remote = Some(PipelineOutput::Gaze {
+                                       left_eye: types::Point3D::default(),
+                                       right_eye: types::Point3D::default(),
+                                       yaw,
+                                       pitch,
+                                       roll: 0.0,
+                                       vector: types::Point3D::default(),
+                                       landmarks: Some(Landmarks { points: composite_points }),
+                                   });
+                                } else {
+                                   best_remote = Some(PipelineOutput::Landmarks(Landmarks { points: composite_points }));
+                                }
+                           }
                   }
              }
              
