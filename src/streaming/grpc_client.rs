@@ -27,13 +27,16 @@ pub struct RemoteResult {
 
 impl GazeStreamClient {
     pub async fn connect(url: String) -> Result<Self> {
-        let client = proto::gaze_stream_service_client::GazeStreamServiceClient::connect(url.clone())
+        // Configure endpoint with TCP_NODELAY to fix 250ms latency on small payloads
+        let channel = tonic::transport::Endpoint::from_shared(url.clone())?
+            .tcp_nodelay(true)
+            .connect()
             .await
             .context("Failed to connect to gRPC server")?;
             
         Ok(Self { 
             url,
-            client 
+            client: proto::gaze_stream_service_client::GazeStreamServiceClient::new(channel),
         })
     }
     

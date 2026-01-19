@@ -302,9 +302,38 @@ fn main() -> anyhow::Result<()> {
                 let mut rx_frame = rx_remote_frame; // Take ownership
                 tokio::spawn(async move {
                     while let Ok(frame) = rx_frame.recv() {
-                         let proto_frame = rusty_eyes::streaming::grpc_client::frame_to_proto(
-                             &frame.to_rgb8(), 0, "camera1"
+                         // PERFORM HEAVY PROCESSING HERE (Off Main Thread)
+                         let rgb = frame.to_rgb8();
+                         
+                         // 1. Resize (1280x720 -> 640x480)
+                         let scaled = image::imageops::resize(
+                             &rgb, 
+                             640, 
+                             480, 
+                             image::imageops::FilterType::Triangle
                          );
+                         
+                         // 2. Grayscale (3 channels -> 1 channel)
+                         let gray = image::imageops::grayscale(&scaled);
+                         
+                         // 3. Encode & Send
+                         // Note: frame_to_proto expects Rgb8 usually, but we can adapt it or just wrap 
+                         // effectively passing Gray as Rgb (tripling bytes) or update frame_to_proto.
+                         // But `grayscale` returns ImageGray (Luma8).
+                         // Let's pass the DynamicImage to a new helper or update frame_to_proto to handle Dynamic?
+                         // Current `frame_to_proto` takes `&ImageBuffer<Rgb<u8>...>`.
+                         
+                         // Hack: Convert Gray back to RGB to satisfy signature, OR send Grayscale over wire?
+                         // Ideally we send 1 channel.
+                         // Let's rely on DynamicImage feature of frame_to_proto if we modify it, 
+                         // or just modify frame_to_proto to take DynamicImage.
+                         // For now, let's update `frame_to_proto` signature in next step.
+                         // HERE: I will call a MODIFIED frame_to_proto that performs the encoding.
+                         
+                         let proto_frame = rusty_eyes::streaming::grpc_client::frame_to_proto_gray(
+                             &gray, 0, "camera1"
+                         );
+
                          if let Err(_) = grpc_tx.send(proto_frame).await {
                              break;
                          }
@@ -401,21 +430,14 @@ fn main() -> anyhow::Result<()> {
         if remote_available && use_remote {
              remote_frame_count += 1;
              // Send frame (non-blocking, drop if full) - TRY FULL FPS
-             // Rate Limit: Send every 2nd frame (approx 15 FPS) to avoid flooding network
-             if remote_frame_count % 2 == 0 {
-                 // Downscale for network efficiency (Fixes Upload Latency)
-                 let scaled_frame = image::imageops::resize(
-                     &latest_realtime_frame, 
-                     640, 
-                     480, 
-                     image::imageops::FilterType::Triangle
-                 );
-                 let frame_to_send = image::imageops::grayscale(&scaled_frame);
-                 
-                 match tx_remote_frame.try_send(image::DynamicImage::ImageLuma8(frame_to_send)) {
+             // Rate Limit: Removed (Back to 30 FPS) as payload is now small
+             if remote_frame_count % 1 == 0 {
+                 // Send RAW frame to worker (offload processing to avoid blocking UI)
+                 // Clone is cheap (memcpy). Resize/Grayscale is expensive.
+                 match tx_remote_frame.try_send(image::DynamicImage::ImageRgb8(latest_realtime_frame.clone())) {
                      Ok(_) => {},
                      Err(std::sync::mpsc::TrySendError::Full(_)) => {
-                         // Dropped frame
+                         // Worker is busy, drop frame (Good behavior)
                      },
                      Err(e) => {
                          log::error!("Remote frame channel disconnected: {}", e);
