@@ -702,12 +702,25 @@ fn main() -> anyhow::Result<()> {
                                 let (mr, mg, mb) = parse_hex(&config.ui.mesh_color_hex);
                                 let dot_size = config.ui.mesh_dot_size;
                                 
-                                for p in &l.points {
+                                let mut drawn_count = 0;
+                                let mut skipped_count = 0;
+                                
+                                for (idx, p) in l.points.iter().enumerate() {
                                     // MediaPipe returns normalized coordinates (0.0-1.0)
                                     // Scale to pixel coordinates
                                     let x = (p.x * width as f32) as usize;
                                     let y = (p.y * height as f32) as usize;
+                                    
+                                    // Debug first and last landmark
+                                    if idx == 0 {
+                                        log::info!("First landmark: ({:.3}, {:.3}) -> pixel ({}, {})", p.x, p.y, x, y);
+                                    }
+                                    if idx == l.points.len() - 1 {
+                                        log::info!("Last landmark: ({:.3}, {:.3}) -> pixel ({}, {})", p.x, p.y, x, y);
+                                    }
+                                    
                                     if x < width as usize && y < height as usize {
+                                         drawn_count += 1;
                                          // Draw Configurable Dot
                                          for dy in 0..dot_size {
                                              for dx in 0..dot_size {
@@ -719,7 +732,13 @@ fn main() -> anyhow::Result<()> {
                                                  }
                                              }
                                          }
+                                    } else {
+                                        skipped_count += 1;
                                     }
+                                }
+                                
+                                if drawn_count > 0 || skipped_count > 0 {
+                                    log::info!("Mesh drawing: {} drawn, {} skipped (out of bounds)", drawn_count, skipped_count);
                                 }
                             }
                         }
