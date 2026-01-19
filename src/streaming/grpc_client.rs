@@ -31,14 +31,11 @@ pub struct RemoteResult {
 
 impl GazeStreamClient {
     pub async fn connect(url: String) -> Result<Self> {
-        // Configure endpoint with TCP_NODELAY to fix 250ms latency on small payloads
-        // Configure endpoint with TCP_NODELAY and KeepAlive settings
+        // Configure endpoint with TCP_NODELAY and basic keepalive
         let channel = tonic::transport::Endpoint::from_shared(url.clone())?
             .tcp_nodelay(true)
             .tcp_keepalive(Some(std::time::Duration::from_secs(60)))
-            .http2_keep_alive_interval(std::time::Duration::from_secs(30))
-            .keep_alive_timeout(std::time::Duration::from_secs(10))
-            .keep_alive_while_idle(true)
+            .timeout(std::time::Duration::from_secs(30))
             .connect()
             .await
             .context("Failed to connect to gRPC server")?;
