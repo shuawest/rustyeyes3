@@ -133,7 +133,8 @@ case "$1" in
     build)
         echo "Starting Build..."
         # Capture both stdout and stderr to build.log
-        ~/.cargo/bin/cargo build --release --no-default-features > build.log 2>&1
+        # Use -j 2 to prevent OOM on Jetson Nano
+        ~/.cargo/bin/cargo build --release --no-default-features -j 2 > build.log 2>&1
         echo "Build Complete. Check build.log for details."
         ;;
     version)
