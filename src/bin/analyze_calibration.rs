@@ -1,7 +1,7 @@
+use serde::Deserialize;
 use std::error::Error;
 use std::fs::File;
 use std::io::BufReader;
-use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
 struct DataPoint {
@@ -34,21 +34,32 @@ fn main() -> Result<(), Box<dyn Error>> {
     println!("Entries: {}", report.entries.len());
 
     // 1. Determine Screen Geometry (approx)
-    let min_x = report.entries.iter().map(|e| e.target_x).fold(f32::INFINITY, f32::min);
-    let max_x = report.entries.iter().map(|e| e.target_x).fold(f32::NEG_INFINITY, f32::max);
-    
+    let min_x = report
+        .entries
+        .iter()
+        .map(|e| e.target_x)
+        .fold(f32::INFINITY, f32::min);
+    let max_x = report
+        .entries
+        .iter()
+        .map(|e| e.target_x)
+        .fold(f32::NEG_INFINITY, f32::max);
+
     // Assume padding, let's say screen is 0..1728 (Macbook Air?) or 1920?
-    // Let's deduce width from max_x. 
+    // Let's deduce width from max_x.
     let width = if max_x > 1800.0 { 1920.0 } else { 1728.0 }; // Heuristic
     let center_x = width / 2.0;
-    
+
     // 2. Map Pixels -> Degrees
     // Assumption: Screen spans approx 53 degrees width (Macbook at normal distance)
     // +/- 26.5 deg from center.
     let fov_width_deg = 53.0;
     let deg_per_pixel = fov_width_deg / width;
-    
-    println!("Geometry: Width={:.0}, Center={:.0}, deg/px={:.4}", width, center_x, deg_per_pixel);
+
+    println!(
+        "Geometry: Width={:.0}, Center={:.0}, deg/px={:.4}",
+        width, center_x, deg_per_pixel
+    );
 
     let mut x_data = Vec::new(); // raw_yaw
     let mut y_data = Vec::new(); // target_angle
@@ -57,18 +68,18 @@ fn main() -> Result<(), Box<dyn Error>> {
         // Convert Target X to Target Angle
         // (x - center) * scale
         // NOTE: Screen X grows Right. Head Yaw grows Left (positive).
-        // Standard convention: 
+        // Standard convention:
         // Screen Right (+X) corresponds to Head Right (-Yaw, usually).
         // But main.rs: "Mirror Mode: -yaw".
         // Let's stick to: Target Angle should follow Head Angle convention.
         // If Head Left = +Yaw.
         // Then Target Left (x < center) should be +Angle.
-        
+
         let delta_x = e.target_x - center_x;
-        // if x < center (Left), delta is negative. 
+        // if x < center (Left), delta is negative.
         // We want Positive Angle for Left.
         let target_angle = -delta_x * deg_per_pixel;
-        
+
         x_data.push(e.raw_yaw as f64);
         y_data.push(target_angle as f64);
     }
@@ -76,7 +87,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     // 3. Linear Regression (Least Squares)
     // y = mx + c
     // target_angle = gain * raw_yaw + offset
-    
+
     let n = x_data.len() as f64;
     let sum_x: f64 = x_data.iter().sum();
     let sum_y: f64 = y_data.iter().sum();

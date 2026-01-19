@@ -1,8 +1,8 @@
-use anyhow::{Result, Context};
-use tonic::transport::Channel;
+use crate::types::{Landmarks, PipelineOutput, Point3D, Rect};
+use anyhow::{Context, Result};
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
-use crate::types::{Point3D, PipelineOutput, Landmarks, Rect};
+use tonic::transport::Channel;
 
 // Import generated proto code
 pub mod proto {
@@ -37,13 +37,13 @@ impl GazeStreamClient {
             .connect()
             .await
             .context("Failed to connect to gRPC server")?;
-            
-        Ok(Self { 
+
+        Ok(Self {
             url,
             client: proto::gaze_stream_service_client::GazeStreamServiceClient::new(channel),
         })
     }
-    
+
     /// Stream video frames to server and receive results
     /// Returns a channel to send frames to, and a stream of results
     pub async fn stream_video(
@@ -55,43 +55,49 @@ impl GazeStreamClient {
         // Use size 1 to prevent bufferbloat. If network is slow, drop frames immediately.
         let (tx, rx) = mpsc::channel(1);
         let request_stream = ReceiverStream::new(rx);
-        
+
         let response = self.client.stream_gaze(request_stream).await?;
         let inbound_stream = response.into_inner();
-        
+
         Ok((tx, inbound_stream))
     }
-    
+
     /// Check health of the remote service using standard gRPC Health Checking Protocol
     pub async fn check_health(&self) -> Result<bool> {
         // Create Endpoint from URL
         let endpoint = tonic::transport::Endpoint::from_shared(self.url.clone())
             .context("Invalid URL for health check")?;
-            
-        let channel = endpoint.connect().await
+
+        let channel = endpoint
+            .connect()
+            .await
             .context("Failed to connect for health check")?;
 
         let mut health_client = tonic_health::pb::health_client::HealthClient::new(channel);
-            
+
         let request = tonic::Request::new(tonic_health::pb::HealthCheckRequest {
             service: "gazestream.GazeStreamService".to_string(),
         });
-        
+
         match health_client.check(request).await {
             Ok(response) => {
                 let status = response.into_inner().status;
-                Ok(status == tonic_health::pb::health_check_response::ServingStatus::Serving as i32)
-            },
+                Ok(
+                    status
+                        == tonic_health::pb::health_check_response::ServingStatus::Serving as i32,
+                )
+            }
             Err(e) => {
                 // Try checking overall server health (empty service name)
-                 let request_all = tonic::Request::new(tonic_health::pb::HealthCheckRequest {
+                let request_all = tonic::Request::new(tonic_health::pb::HealthCheckRequest {
                     service: "".to_string(),
                 });
                 if let Ok(resp) = health_client.check(request_all).await {
-                     let status = resp.into_inner().status;
-                     return Ok(status == tonic_health::pb::health_check_response::ServingStatus::Serving as i32);
+                    let status = resp.into_inner().status;
+                    return Ok(status
+                        == tonic_health::pb::health_check_response::ServingStatus::Serving as i32);
                 }
-                
+
                 // Fallback: If we can't check standard health, but we connected (channel is up), we assume somewhat healthy?
                 // But endpoint.connect() just establishes TCP.
                 // Log warning and return error if official check fails.
@@ -103,22 +109,25 @@ impl GazeStreamClient {
 
 // Helper to convert internal ImageBuffer to Proto VideoFrame
 pub fn frame_to_proto(
-    frame: &image::ImageBuffer<image::Rgb<u8>, Vec<u8>>, 
-    timestamp_us: i64, 
-    stream_id: &str
+    frame: &image::ImageBuffer<image::Rgb<u8>, Vec<u8>>,
+    timestamp_us: i64,
+    stream_id: &str,
 ) -> proto::VideoFrame {
     // For MVP: Send raw RGB bytes or encode as JPEG
     // Encoding as JPEG reduces bandwidth significantly
     let mut buf = Vec::new();
     let dyn_imgs = image::DynamicImage::ImageRgb8(frame.clone());
-    
+
     // Attempt JPEG encoding
     // Quality 50 is sufficient for face mesh and reduces size significantly vs default 75
     let mut encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut buf, 50);
     let _ = encoder.encode_image(&dyn_imgs);
 
     // Convert to microrsecond timestamp
-    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_micros() as i64;
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_micros() as i64;
     let mut stamps = std::collections::HashMap::new();
     stamps.insert("client_send".to_string(), now);
 
@@ -133,20 +142,23 @@ pub fn frame_to_proto(
 }
 
 pub fn frame_to_proto_gray(
-    frame: &image::ImageBuffer<image::Luma<u8>, Vec<u8>>, 
-    timestamp_us: i64, 
-    stream_id: &str
+    frame: &image::ImageBuffer<image::Luma<u8>, Vec<u8>>,
+    timestamp_us: i64,
+    stream_id: &str,
 ) -> proto::VideoFrame {
     let mut buf = Vec::new();
     let dyn_imgs = image::DynamicImage::ImageLuma8(frame.clone());
-    
+
     // Quality 50 is sufficient for face mesh and reduces size significantly
     let mut encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut buf, 50);
     let _ = encoder.encode_image(&dyn_imgs);
 
     // Convert to microrsecond timestamp
     // We reuse the same timestamp logic
-    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_micros() as i64;
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_micros() as i64;
     let mut stamps = std::collections::HashMap::new();
     stamps.insert("client_send".to_string(), now);
 
@@ -163,14 +175,18 @@ pub fn frame_to_proto_gray(
 // Helper to convert Proto Result to internal RemoteResult
 pub fn proto_to_result(proto_res: proto::FaceMeshResult) -> RemoteResult {
     let mut faces = Vec::new();
-    
+
     for face in proto_res.faces {
-        let points: Vec<Point3D> = face.landmarks.iter().map(|lm| Point3D {
-            x: lm.x,
-            y: lm.y,
-            z: lm.z,
-        }).collect();
-        
+        let points: Vec<Point3D> = face
+            .landmarks
+            .iter()
+            .map(|lm| Point3D {
+                x: lm.x,
+                y: lm.y,
+                z: lm.z,
+            })
+            .collect();
+
         let face_box = if let Some(bbox) = face.face_box {
             Some(Rect {
                 x: bbox.x,
@@ -187,17 +203,17 @@ pub fn proto_to_result(proto_res: proto::FaceMeshResult) -> RemoteResult {
         } else {
             None
         };
-        
+
         faces.push(RemoteFace {
             landmarks: Landmarks { points },
             face_box,
-            gaze
+            gaze,
         });
     }
 
     // Backwards compatibility for old server logic (if needed, but we upgraded both)
     // If faces is empty but landmarks exists (old proto)? No, proto changed field name.
-    
+
     RemoteResult {
         faces,
         timestamp: proto_res.timestamp_us as u64,

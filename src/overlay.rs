@@ -1,6 +1,6 @@
-use std::process::{Command, Child, Stdio};
-use std::io::Write;
 use anyhow::Result;
+use std::io::Write;
+use std::process::{Child, Command, Stdio};
 
 pub struct OverlayWindow {
     process: Child,
@@ -13,7 +13,7 @@ impl OverlayWindow {
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .spawn()?;
-            
+
         Ok(Self { process })
     }
 

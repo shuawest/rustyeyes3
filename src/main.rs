@@ -943,7 +943,6 @@ fn main() -> anyhow::Result<()> {
             // CRITICAL: Must be called to show the frame!
             window.update(&display_buffer)?;
         }
-
     Ok(())
 }
 

@@ -15,7 +15,16 @@ pub fn measure_text_width(text: &str, scale: usize) -> usize {
     text.len() * ((FONT_WIDTH * scale) + scale)
 }
 
-pub fn draw_text_line(buffer: &mut [u8], width: usize, height: usize, x: usize, y: usize, text: &str, color: (u8, u8, u8), scale: usize) {
+pub fn draw_text_line(
+    buffer: &mut [u8],
+    width: usize,
+    height: usize,
+    x: usize,
+    y: usize,
+    text: &str,
+    color: (u8, u8, u8),
+    scale: usize,
+) {
     let mut cx = x;
     for c in text.chars() {
         draw_char(buffer, width, height, cx, y, c, color, scale);
@@ -23,9 +32,18 @@ pub fn draw_text_line(buffer: &mut [u8], width: usize, height: usize, x: usize, 
     }
 }
 
-fn draw_char(buffer: &mut [u8], width: usize, height: usize, x: usize, y: usize, c: char, color: (u8, u8, u8), scale: usize) {
+fn draw_char(
+    buffer: &mut [u8],
+    width: usize,
+    height: usize,
+    x: usize,
+    y: usize,
+    c: char,
+    color: (u8, u8, u8),
+    scale: usize,
+) {
     let map = get_bitmap(c);
-    
+
     for (row, bits) in map.iter().enumerate() {
         // Iterate bits from MSB (bit 4) to LSB (bit 0) for 5-pixel width
         for col in 0..5 {
@@ -39,8 +57,8 @@ fn draw_char(buffer: &mut [u8], width: usize, height: usize, x: usize, y: usize,
                             let idx = (py * width + px) * 3;
                             if idx + 2 < buffer.len() {
                                 buffer[idx] = color.0;
-                                buffer[idx+1] = color.1;
-                                buffer[idx+2] = color.2;
+                                buffer[idx + 1] = color.1;
+                                buffer[idx + 2] = color.2;
                             }
                         }
                     }
@@ -94,6 +112,6 @@ fn get_bitmap(c: char) -> [u8; 7] {
         ')' => [0x04, 0x02, 0x01, 0x01, 0x01, 0x02, 0x04],
         ':' => [0x00, 0x0C, 0x0C, 0x00, 0x0C, 0x0C, 0x00],
         ',' => [0x00, 0x00, 0x00, 0x00, 0x00, 0x0C, 0x04], // low comma
-        _   => [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00],
+        _ => [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00],
     }
 }

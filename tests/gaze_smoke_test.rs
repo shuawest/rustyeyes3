@@ -3,15 +3,13 @@ mod tests {
     use std::path::Path;
     // We need to allow dead code since we are importing modules that might strict-check
     #[allow(dead_code)]
-    
-    // Note: We can't easily import the binary crate modules in integration tests 
-    // unless they are in a lib.rs. For this project structure (main.rs), 
+    // Note: We can't easily import the binary crate modules in integration tests
+    // unless they are in a lib.rs. For this project structure (main.rs),
     // integration tests are harder.
-    // Instead, we will simulate the check by ensuring the models exist and basic config 
-    // logic holds. 
-    // Ideally, we would refactor `src/gaze.rs` into a library but for now we will 
+    // Instead, we will simulate the check by ensuring the models exist and basic config
+    // logic holds.
+    // Ideally, we would refactor `src/gaze.rs` into a library but for now we will
     // verify the artifacts produced.
-
     #[test]
     fn verify_models_exist() {
         let models = vec![

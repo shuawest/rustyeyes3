@@ -8,7 +8,7 @@ pub struct CalibrationParams {
     pub yaw_gain: f32,
     pub pitch_gain: f32,
     #[serde(default)]
-    pub yaw_curve: f32,   // Coefficient for (deg - off)^2
+    pub yaw_curve: f32, // Coefficient for (deg - off)^2
     #[serde(default)]
     pub pitch_curve: f32, // Coefficient for (deg - off)^2
 }
@@ -18,7 +18,7 @@ impl Default for CalibrationParams {
         Self {
             yaw_offset: 0.0,
             pitch_offset: 0.0,
-            yaw_gain: 1.0, 
+            yaw_gain: 1.0,
             pitch_gain: 1.0,
             yaw_curve: 0.0,
             pitch_curve: 0.0,

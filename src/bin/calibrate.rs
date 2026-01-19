@@ -1,14 +1,14 @@
+use chrono::prelude::*;
+use image::io::Reader as ImageReader;
+use image::{DynamicImage, GenericImageView};
 use rusty_eyes::config::AppConfig;
 use rusty_eyes::gaze::{L2CSPipeline, MobileGazePipeline};
 use rusty_eyes::pipeline::Pipeline;
-use rusty_eyes::rectification::{CalibrationParams, CalibrationConfig};
-use std::fs;
-use std::path::{Path, PathBuf};
-use image::io::Reader as ImageReader;
-use image::{DynamicImage, GenericImageView};
-use chrono::prelude::*;
+use rusty_eyes::rectification::{CalibrationConfig, CalibrationParams};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::fs;
+use std::path::{Path, PathBuf};
 
 // =========================================================================
 // Data Structures
@@ -97,14 +97,17 @@ impl SimpleRng {
     fn new(seed: u64) -> Self {
         Self { state: seed }
     }
-    
+
     fn next_f32(&mut self) -> f32 {
         // LCG constants
-        self.state = self.state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        self.state = self
+            .state
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
         // Normalize to 0.0 - 1.0
         (self.state >> 32) as f32 / u32::MAX as f32
     }
-    
+
     fn range(&mut self, min: f32, max: f32) -> f32 {
         min + (max - min) * self.next_f32()
     }
@@ -114,25 +117,32 @@ impl SimpleRng {
 // SVR Training Logic (SmartCore)
 // =========================================================================
 
-use smartcore::svm::svr::{SVR, SVRParameters};
-use smartcore::svm::Kernels;
 use smartcore::linalg::basic::matrix::DenseMatrix;
+use smartcore::svm::svr::{SVRParameters, SVR};
+use smartcore::svm::Kernels;
 use std::io::Write;
 
 #[allow(dead_code)]
 fn train_svr_model(entries: &[DataPoint], model_name: &str) -> anyhow::Result<()> {
-    println!("Training SVR for {} ({} points)...", model_name, entries.len());
-    
+    println!(
+        "Training SVR for {} ({} points)...",
+        model_name,
+        entries.len()
+    );
+
     // X features: [yaw, pitch]
     // Y targets: [screen_x, screen_y]
     // SVR is single-target, so we need two models: SVR_X and SVR_Y.
-    
-    let x_data: Vec<Vec<f64>> = entries.iter().map(|e| vec![e.raw_yaw as f64, e.raw_pitch as f64]).collect();
+
+    let x_data: Vec<Vec<f64>> = entries
+        .iter()
+        .map(|e| vec![e.raw_yaw as f64, e.raw_pitch as f64])
+        .collect();
     let y_x_data: Vec<f64> = entries.iter().map(|e| e.target_x as f64).collect();
     let y_y_data: Vec<f64> = entries.iter().map(|e| e.target_y as f64).collect();
-    
+
     let x_matrix = DenseMatrix::from_2d_vec(&x_data);
-    
+
     // RBF Kernel is best for non-linear gaze mapping
     // RBF Kernel is best for non-linear gaze mapping
     // Note: Gamma is set via with_gamma if needed, but 0.3.2 might not have it exposed directly on params?
@@ -143,22 +153,30 @@ fn train_svr_model(entries: &[DataPoint], model_name: &str) -> anyhow::Result<()
     // Gamma logic: exp(-gamma * dist^2).
     // If Gamma=0.7, exp(-280) = 0. Too spiky.
     // If Gamma=0.01, exp(-4) = 0.01. Better.
-    
+
     let c_candidates = vec![10.0, 100.0, 500.0, 1000.0];
     let gamma_candidates = vec![0.001, 0.005, 0.01, 0.05, 0.1];
     let eps_candidates = vec![0.1, 1.0, 5.0];
 
     // Helper to evaluate parameters
     let train_and_eval = |x: &DenseMatrix<f64>, y: &Vec<f64>, c: f64, g: f64, eps: f64| -> f64 {
-         let p = SVRParameters::default().with_kernel(Kernels::rbf().with_gamma(g)).with_c(c).with_eps(eps);
-         if let Ok(model) = SVR::fit(x, y, &p) {
-             // Calc MSE on training data (LOOCV would be better but simple fit first)
-             let preds = model.predict(x).unwrap();
-             let mse: f64 = y.iter().zip(preds.iter()).map(|(t, p)| (t - p).powi(2)).sum::<f64>() / y.len() as f64;
-             mse
-         } else {
-             f64::MAX
-         }
+        let p = SVRParameters::default()
+            .with_kernel(Kernels::rbf().with_gamma(g))
+            .with_c(c)
+            .with_eps(eps);
+        if let Ok(model) = SVR::fit(x, y, &p) {
+            // Calc MSE on training data (LOOCV would be better but simple fit first)
+            let preds = model.predict(x).unwrap();
+            let mse: f64 = y
+                .iter()
+                .zip(preds.iter())
+                .map(|(t, p)| (t - p).powi(2))
+                .sum::<f64>()
+                / y.len() as f64;
+            mse
+        } else {
+            f64::MAX
+        }
     };
 
     // Find Best X Params
@@ -168,54 +186,74 @@ fn train_svr_model(entries: &[DataPoint], model_name: &str) -> anyhow::Result<()
         for &g in &gamma_candidates {
             for &e in &eps_candidates {
                 let mse = train_and_eval(&x_matrix, &y_x_data, c, g, e);
-                if mse < min_mse_x { min_mse_x = mse; best_x_params = (c, g, e); }
+                if mse < min_mse_x {
+                    min_mse_x = mse;
+                    best_x_params = (c, g, e);
+                }
             }
         }
     }
-    println!("  Best X Params: C={}, Gamma={}, Eps={} (MSE={:.2})", best_x_params.0, best_x_params.1, best_x_params.2, min_mse_x);
+    println!(
+        "  Best X Params: C={}, Gamma={}, Eps={} (MSE={:.2})",
+        best_x_params.0, best_x_params.1, best_x_params.2, min_mse_x
+    );
 
     // Find Best Y Params
     let mut best_y_params = (100.0, 0.01, 0.1);
     let mut min_mse_y = f64::MAX;
     for &c in &c_candidates {
         for &g in &gamma_candidates {
-             for &e in &eps_candidates {
+            for &e in &eps_candidates {
                 let mse = train_and_eval(&x_matrix, &y_y_data, c, g, e);
-                if mse < min_mse_y { min_mse_y = mse; best_y_params = (c, g, e); }
+                if mse < min_mse_y {
+                    min_mse_y = mse;
+                    best_y_params = (c, g, e);
+                }
             }
         }
     }
-    println!("  Best Y Params: C={}, Gamma={}, Eps={} (MSE={:.2})", best_y_params.0, best_y_params.1, best_y_params.2, min_mse_y);
+    println!(
+        "  Best Y Params: C={}, Gamma={}, Eps={} (MSE={:.2})",
+        best_y_params.0, best_y_params.1, best_y_params.2, min_mse_y
+    );
 
     // Train Final Models
-    let params_x = SVRParameters::default().with_kernel(Kernels::rbf().with_gamma(best_x_params.1)).with_c(best_x_params.0).with_eps(best_x_params.2);
+    let params_x = SVRParameters::default()
+        .with_kernel(Kernels::rbf().with_gamma(best_x_params.1))
+        .with_c(best_x_params.0)
+        .with_eps(best_x_params.2);
     let svr_x = SVR::fit(&x_matrix, &y_x_data, &params_x)
         .map_err(|e| anyhow::anyhow!("SVR X Training failed: {}", e))?;
-        
-    let params_y = SVRParameters::default().with_kernel(Kernels::rbf().with_gamma(best_y_params.1)).with_c(best_y_params.0).with_eps(best_y_params.2);
+
+    let params_y = SVRParameters::default()
+        .with_kernel(Kernels::rbf().with_gamma(best_y_params.1))
+        .with_c(best_y_params.0)
+        .with_eps(best_y_params.2);
     let svr_y = SVR::fit(&x_matrix, &y_y_data, &params_y)
         .map_err(|e| anyhow::anyhow!("SVR Y Training failed: {}", e))?;
-        
+
     // Serialize
     // We save as bincode or JSON? SmartCore supports bincode via serde.
     let path_x = format!("svr_{}_x.model", model_name);
     let path_y = format!("svr_{}_y.model", model_name);
-    
+
     let bytes_x = bincode::serialize(&svr_x)?;
     let bytes_y = bincode::serialize(&svr_y)?;
-    
+
     fs::write(&path_x, bytes_x)?;
     fs::write(&path_y, bytes_y)?;
-    
+
     println!("  Saved SVR models to {} and {}", path_x, path_y);
-    
+
     Ok(())
 }
 
-
-fn optimize_params(entries: &[DataPoint], base_model: &str) -> (CalibrationParams, CalibrationMetrics) {
+fn optimize_params(
+    entries: &[DataPoint],
+    base_model: &str,
+) -> (CalibrationParams, CalibrationMetrics) {
     println!("Optimizing {} using Analytic Least Squares...", base_model);
-    
+
     let center_x = 1440.0 / 2.0;
     let center_y = 900.0 / 2.0;
 
@@ -224,100 +262,137 @@ fn optimize_params(entries: &[DataPoint], base_model: &str) -> (CalibrationParam
     // Using Cramer's Rule or basic Matrix Inversion for 3x3
     let solve_poly2 = |xs: &[f32], ys: &[f32]| -> (f32, f32, f32) {
         let n = xs.len() as f32;
-        if n < 3.0 { return (0.0, 0.0, 0.0); }
-        
-        let mut s_x = 0.0; let mut s_x2 = 0.0; let mut s_x3 = 0.0; let mut s_x4 = 0.0;
-        let mut s_y = 0.0; let mut s_xy = 0.0; let mut s_x2y = 0.0;
-        
+        if n < 3.0 {
+            return (0.0, 0.0, 0.0);
+        }
+
+        let mut s_x = 0.0;
+        let mut s_x2 = 0.0;
+        let mut s_x3 = 0.0;
+        let mut s_x4 = 0.0;
+        let mut s_y = 0.0;
+        let mut s_xy = 0.0;
+        let mut s_x2y = 0.0;
+
         for i in 0..xs.len() {
             let x = xs[i];
             let y = ys[i];
-            let x2 = x*x;
+            let x2 = x * x;
             s_x += x;
             s_x2 += x2;
-            s_x3 += x2*x;
-            s_x4 += x2*x2;
+            s_x3 += x2 * x;
+            s_x4 += x2 * x2;
             s_y += y;
-            s_xy += x*y;
-            s_x2y += x2*y;
+            s_xy += x * y;
+            s_x2y += x2 * y;
         }
-        
+
         // Matrix:
         // [ S_x4 S_x3 S_x2 ] [ a ]   [ S_x2y ]
         // [ S_x3 S_x2 S_x  ] [ b ] = [ S_xy  ]
         // [ S_x2 S_x  n    ] [ c ]   [ S_y   ]
-        
-        let m11 = s_x4; let m12 = s_x3; let m13 = s_x2;
-        let m21 = s_x3; let m22 = s_x2; let m23 = s_x;
-        let m31 = s_x2; let m32 = s_x;  let m33 = n;
-        
+
+        let m11 = s_x4;
+        let m12 = s_x3;
+        let m13 = s_x2;
+        let m21 = s_x3;
+        let m22 = s_x2;
+        let m23 = s_x;
+        let m31 = s_x2;
+        let m32 = s_x;
+        let m33 = n;
+
         // Determinant
-        let det = m11*(m22*m33 - m23*m32) - m12*(m21*m33 - m23*m31) + m13*(m21*m32 - m22*m31);
-        
-        if det.abs() < 1e-9 { return (0.0, 0.0, 0.0); } // Singular
-        
-        let det_a = s_x2y*(m22*m33 - m23*m32) - m12*(s_xy*m33 - s_y*m23) + m13*(s_xy*m32 - s_y*m22);
-        let det_b = m11*(s_xy*m33 - s_y*m23) - s_x2y*(m21*m33 - m23*m31) + m13*(m21*s_y - s_xy*m31);
-        let _det_c = m11*(m22*s_y - m32*s_xy) - m12*(m21*s_y - m31*s_xy) + s_x2y*(m21*m32 - m22*m31);
-        let _det_c_corr = m11*(m22*s_y - s_xy*m32) - m12*(m21*s_y - s_xy*m31) + m13*(m21*s_xy - s_y*m32); 
-        let _dc = m11*(m22*s_y - s_xy*m32) - m12*(m21*s_y - s_xy*m31) + s_x2y*(m21*m32 - m22*m31);
-        
+        let det = m11 * (m22 * m33 - m23 * m32) - m12 * (m21 * m33 - m23 * m31)
+            + m13 * (m21 * m32 - m22 * m31);
+
+        if det.abs() < 1e-9 {
+            return (0.0, 0.0, 0.0);
+        } // Singular
+
+        let det_a = s_x2y * (m22 * m33 - m23 * m32) - m12 * (s_xy * m33 - s_y * m23)
+            + m13 * (s_xy * m32 - s_y * m22);
+        let det_b = m11 * (s_xy * m33 - s_y * m23) - s_x2y * (m21 * m33 - m23 * m31)
+            + m13 * (m21 * s_y - s_xy * m31);
+        let _det_c = m11 * (m22 * s_y - m32 * s_xy) - m12 * (m21 * s_y - m31 * s_xy)
+            + s_x2y * (m21 * m32 - m22 * m31);
+        let _det_c_corr = m11 * (m22 * s_y - s_xy * m32) - m12 * (m21 * s_y - s_xy * m31)
+            + m13 * (m21 * s_xy - s_y * m32);
+        let _dc = m11 * (m22 * s_y - s_xy * m32) - m12 * (m21 * s_y - s_xy * m31)
+            + s_x2y * (m21 * m32 - m22 * m31);
+
         // Correct form:
-        let det_c_real = m11*(m22*s_y - s_xy*m32) - m12*(m21*s_y - s_xy*m31) + s_x2y*(m21*m32 - m22*m31);
-        
+        let det_c_real = m11 * (m22 * s_y - s_xy * m32) - m12 * (m21 * s_y - s_xy * m31)
+            + s_x2y * (m21 * m32 - m22 * m31);
+
         (det_a / det, det_b / det, det_c_real / det)
     };
-    
+
     // -------------------------------------------------------------
     // RANSAC IMPLEMENTATION (Robust polynomial fit)
     // -------------------------------------------------------------
     // Iterates 1000 times selecting random subsets to find the model
     // that fits the most points (inliers) to exclude outliers.
-    
+
     let iterations = 1000;
     let threshold_px = 150.0; // Inlier threshold
     let min_samples = 4; // Minimum points to fit quadratic (3 needed, 4 for safety)
-    
+
     let n_points = entries.len();
     if n_points < min_samples {
-         // Fallback to simple fit if not enough data for RANSAC
-         println!("Not enough points for RANSAC ({} < {}), using global fit.", n_points, min_samples);
-         return optimize_params_simple(entries, base_model, center_x, center_y);
+        // Fallback to simple fit if not enough data for RANSAC
+        println!(
+            "Not enough points for RANSAC ({} < {}), using global fit.",
+            n_points, min_samples
+        );
+        return optimize_params_simple(entries, base_model, center_x, center_y);
     }
 
     let mut rng = SimpleRng::new(12345);
-    
+
     let mut best_inlier_count = 0;
     let mut best_loss = f32::MAX;
     let mut best_params = CalibrationParams {
-        yaw_offset: 0.0, pitch_offset: 0.0,
-        yaw_gain: 1.0, pitch_gain: 1.0,
-        yaw_curve: 0.0, pitch_curve: 0.0,
+        yaw_offset: 0.0,
+        pitch_offset: 0.0,
+        yaw_gain: 1.0,
+        pitch_gain: 1.0,
+        yaw_curve: 0.0,
+        pitch_curve: 0.0,
     };
-    
+
     let magic = 20.0;
-    
+
     println!("Running RANSAC with {} iterations...", iterations);
-    
+
     for _ in 0..iterations {
         // 1. Pick Random Subset
         let mut subset_indices = Vec::with_capacity(min_samples);
         while subset_indices.len() < min_samples {
-             let idx = (rng.next_f32() * n_points as f32) as usize;
-             if !subset_indices.contains(&idx) {
-                 subset_indices.push(idx);
-             }
+            let idx = (rng.next_f32() * n_points as f32) as usize;
+            if !subset_indices.contains(&idx) {
+                subset_indices.push(idx);
+            }
         }
-        
+
         let subset_yaws: Vec<f32> = subset_indices.iter().map(|&i| entries[i].raw_yaw).collect();
-        let subset_tgt_xs: Vec<f32> = subset_indices.iter().map(|&i| entries[i].target_x - center_x).collect();
-        let subset_pitches: Vec<f32> = subset_indices.iter().map(|&i| entries[i].raw_pitch).collect();
-        let subset_tgt_ys: Vec<f32> = subset_indices.iter().map(|&i| entries[i].target_y - center_y).collect();
+        let subset_tgt_xs: Vec<f32> = subset_indices
+            .iter()
+            .map(|&i| entries[i].target_x - center_x)
+            .collect();
+        let subset_pitches: Vec<f32> = subset_indices
+            .iter()
+            .map(|&i| entries[i].raw_pitch)
+            .collect();
+        let subset_tgt_ys: Vec<f32> = subset_indices
+            .iter()
+            .map(|&i| entries[i].target_y - center_y)
+            .collect();
 
         // 2. Solve for Subset
         let (a_y, b_y, c_y) = solve_poly2(&subset_yaws, &subset_tgt_xs);
         let (a_p, b_p, c_p) = solve_poly2(&subset_pitches, &subset_tgt_ys);
-        
+
         let params = CalibrationParams {
             yaw_curve: a_y / magic,
             yaw_gain: b_y / magic,
@@ -326,128 +401,161 @@ fn optimize_params(entries: &[DataPoint], base_model: &str) -> (CalibrationParam
             pitch_gain: b_p / magic,
             pitch_offset: c_p / magic,
         };
-        
+
         // 3. Count Inliers
         let mut inliers = 0;
         let mut total_subset_loss = 0.0;
-        
+
         for e in entries {
             let y = e.raw_yaw;
             let p = e.raw_pitch;
-            
-            let pred_x = center_x + (params.yaw_curve * y*y + params.yaw_gain * y + params.yaw_offset) * magic;
-            let pred_y = center_y + (params.pitch_curve * p*p + params.pitch_gain * p + params.pitch_offset) * magic;
-            
+
+            let pred_x = center_x
+                + (params.yaw_curve * y * y + params.yaw_gain * y + params.yaw_offset) * magic;
+            let pred_y = center_y
+                + (params.pitch_curve * p * p + params.pitch_gain * p + params.pitch_offset)
+                    * magic;
+
             let dx = pred_x - e.target_x;
             let dy = pred_y - e.target_y;
-            let err = (dx*dx + dy*dy).sqrt();
-            
+            let err = (dx * dx + dy * dy).sqrt();
+
             if err < threshold_px {
                 inliers += 1;
                 total_subset_loss += err;
             }
         }
-        
+
         // 4. Update Best
         // Prefer more inliers. Tie-break with lower inlier loss.
-        if inliers > best_inlier_count || (inliers == best_inlier_count && total_subset_loss < best_loss) {
+        if inliers > best_inlier_count
+            || (inliers == best_inlier_count && total_subset_loss < best_loss)
+        {
             best_inlier_count = inliers;
             best_loss = total_subset_loss;
             best_params = params;
         }
     }
-    
+
     // 5. Final Re-fit on ALL Inliers of Best Model (Polishing)
-    println!("RANSAC Best: {}/{} inliers. Polishing...", best_inlier_count, n_points);
-    
+    println!(
+        "RANSAC Best: {}/{} inliers. Polishing...",
+        best_inlier_count, n_points
+    );
+
     let mut final_yaws = Vec::new();
     let mut final_tgt_xs = Vec::new();
     let mut final_pitches = Vec::new();
     let mut final_tgt_ys = Vec::new();
-    
+
     for e in entries {
         let y = e.raw_yaw;
         let p = e.raw_pitch;
-        
-        let pred_x = center_x + (best_params.yaw_curve * y*y + best_params.yaw_gain * y + best_params.yaw_offset) * magic;
-        let pred_y = center_y + (best_params.pitch_curve * p*p + best_params.pitch_gain * p + best_params.pitch_offset) * magic;
-        
+
+        let pred_x = center_x
+            + (best_params.yaw_curve * y * y + best_params.yaw_gain * y + best_params.yaw_offset)
+                * magic;
+        let pred_y = center_y
+            + (best_params.pitch_curve * p * p
+                + best_params.pitch_gain * p
+                + best_params.pitch_offset)
+                * magic;
+
         let dx = pred_x - e.target_x;
         let dy = pred_y - e.target_y;
-        let err = (dx*dx + dy*dy).sqrt();
-        
+        let err = (dx * dx + dy * dy).sqrt();
+
         if err < threshold_px {
-             final_yaws.push(e.raw_yaw);
-             final_tgt_xs.push(e.target_x - center_x);
-             final_pitches.push(e.raw_pitch);
-             final_tgt_ys.push(e.target_y - center_y);
+            final_yaws.push(e.raw_yaw);
+            final_tgt_xs.push(e.target_x - center_x);
+            final_pitches.push(e.raw_pitch);
+            final_tgt_ys.push(e.target_y - center_y);
         }
     }
-    
+
     // Check if we have enough inliers for refit, else keep robust best
     if final_yaws.len() >= min_samples {
-         let (a_y, b_y, c_y) = solve_poly2(&final_yaws, &final_tgt_xs);
-         let (a_p, b_p, c_p) = solve_poly2(&final_pitches, &final_tgt_ys);
-         
-         best_params.yaw_curve = a_y / magic;
-         best_params.yaw_gain = b_y / magic;
-         best_params.yaw_offset = c_y / magic;
-         best_params.pitch_curve = a_p / magic;
-         best_params.pitch_gain = b_p / magic;
-         best_params.pitch_offset = c_p / magic;
+        let (a_y, b_y, c_y) = solve_poly2(&final_yaws, &final_tgt_xs);
+        let (a_p, b_p, c_p) = solve_poly2(&final_pitches, &final_tgt_ys);
+
+        best_params.yaw_curve = a_y / magic;
+        best_params.yaw_gain = b_y / magic;
+        best_params.yaw_offset = c_y / magic;
+        best_params.pitch_curve = a_p / magic;
+        best_params.pitch_gain = b_p / magic;
+        best_params.pitch_offset = c_p / magic;
     }
-    
+
     // --- End RANSAC ---
 
     let metrics = calculate_metrics(entries, &best_params);
     (best_params, metrics)
 }
 
-fn optimize_params_simple(entries: &[DataPoint], _base_model: &str, center_x: f32, center_y: f32) -> (CalibrationParams, CalibrationMetrics) {
+fn optimize_params_simple(
+    entries: &[DataPoint],
+    _base_model: &str,
+    center_x: f32,
+    center_y: f32,
+) -> (CalibrationParams, CalibrationMetrics) {
     // Helper for Polynomial Regression (Y = ax^2 + bx + c)
     // Returns (a, b, c)
     let solve_poly2 = |xs: &[f32], ys: &[f32]| -> (f32, f32, f32) {
         let n = xs.len() as f32;
         let s_x: f32 = xs.iter().sum();
-        let s_x2: f32 = xs.iter().map(|x| x*x).sum();
-        let s_x3: f32 = xs.iter().map(|x| x*x*x).sum();
-        let s_x4: f32 = xs.iter().map(|x| x*x*x*x).sum();
+        let s_x2: f32 = xs.iter().map(|x| x * x).sum();
+        let s_x3: f32 = xs.iter().map(|x| x * x * x).sum();
+        let s_x4: f32 = xs.iter().map(|x| x * x * x * x).sum();
         let s_y: f32 = ys.iter().sum();
-        let s_xy: f32 = xs.iter().zip(ys.iter()).map(|(x, y)| x*y).sum();
-        let s_x2y: f32 = xs.iter().zip(ys.iter()).map(|(x, y)| x*x*y).sum();
-        
-        // Matrix M = 
+        let s_xy: f32 = xs.iter().zip(ys.iter()).map(|(x, y)| x * y).sum();
+        let s_x2y: f32 = xs.iter().zip(ys.iter()).map(|(x, y)| x * x * y).sum();
+
+        // Matrix M =
         // [ s_x4 s_x3 s_x2 ]
         // [ s_x3 s_x2 s_x  ]
         // [ s_x2 s_x  n    ]
-        
-        let m11 = s_x4; let m12 = s_x3; let m13 = s_x2;
-        let m21 = s_x3; let m22 = s_x2; let m23 = s_x;
-        let m31 = s_x2; let m32 = s_x;  let m33 = n;
-        
-        let det = m11*(m22*m33 - m23*m32) - m12*(m21*m33 - m23*m31) + m13*(m21*m32 - m22*m31);
-        
-        if det.abs() < 1e-9 { return (0.0, 0.0, 0.0); }
-        
-        let det_a = s_x2y*(m22*m33 - m23*m32) - m12*(s_xy*m33 - s_y*m23) + m13*(s_xy*m32 - s_y*m22);
-        let det_b = m11*(s_xy*m33 - s_y*m23) - s_x2y*(m21*m33 - m23*m31) + m13*(m21*s_y - s_xy*m31);
-        let _det_c = m11*(m22*s_y - m32*s_xy) - m12*(m21*s_y - m31*s_xy) + s_x2y*(m21*m32 - m22*m31);
-        let _det_c_corr = m11*(m22*s_y - s_xy*m32) - m12*(m21*s_y - s_xy*m31) + m13*(m21*s_xy - s_y*m32);
-        let det_c_real = m11*(m22*s_y - s_xy*m32) - m12*(m21*s_y - s_xy*m31) + s_x2y*(m21*m32 - m22*m31);
-        
+
+        let m11 = s_x4;
+        let m12 = s_x3;
+        let m13 = s_x2;
+        let m21 = s_x3;
+        let m22 = s_x2;
+        let m23 = s_x;
+        let m31 = s_x2;
+        let m32 = s_x;
+        let m33 = n;
+
+        let det = m11 * (m22 * m33 - m23 * m32) - m12 * (m21 * m33 - m23 * m31)
+            + m13 * (m21 * m32 - m22 * m31);
+
+        if det.abs() < 1e-9 {
+            return (0.0, 0.0, 0.0);
+        }
+
+        let det_a = s_x2y * (m22 * m33 - m23 * m32) - m12 * (s_xy * m33 - s_y * m23)
+            + m13 * (s_xy * m32 - s_y * m22);
+        let det_b = m11 * (s_xy * m33 - s_y * m23) - s_x2y * (m21 * m33 - m23 * m31)
+            + m13 * (m21 * s_y - s_xy * m31);
+        let _det_c = m11 * (m22 * s_y - m32 * s_xy) - m12 * (m21 * s_y - m31 * s_xy)
+            + s_x2y * (m21 * m32 - m22 * m31);
+        let _det_c_corr = m11 * (m22 * s_y - s_xy * m32) - m12 * (m21 * s_y - s_xy * m31)
+            + m13 * (m21 * s_xy - s_y * m32);
+        let det_c_real = m11 * (m22 * s_y - s_xy * m32) - m12 * (m21 * s_y - s_xy * m31)
+            + s_x2y * (m21 * m32 - m22 * m31);
+
         (det_a / det, det_b / det, det_c_real / det)
     };
-    
+
     let magic = 20.0;
-    
+
     let raw_yaws: Vec<f32> = entries.iter().map(|e| e.raw_yaw).collect();
     let tgt_xs: Vec<f32> = entries.iter().map(|e| e.target_x - center_x).collect();
     let (a_yaw, b_yaw, c_yaw) = solve_poly2(&raw_yaws, &tgt_xs);
-    
+
     let raw_pitches: Vec<f32> = entries.iter().map(|e| e.raw_pitch).collect();
-    let tgt_ys: Vec<f32> = entries.iter().map(|e| e.target_y - center_y).collect(); 
+    let tgt_ys: Vec<f32> = entries.iter().map(|e| e.target_y - center_y).collect();
     let (a_pitch, b_pitch, c_pitch) = solve_poly2(&raw_pitches, &tgt_ys);
-    
+
     let best_params = CalibrationParams {
         yaw_offset: c_yaw / magic,
         pitch_offset: c_pitch / magic,
@@ -456,7 +564,7 @@ fn optimize_params_simple(entries: &[DataPoint], _base_model: &str, center_x: f3
         yaw_curve: a_yaw / magic,
         pitch_curve: a_pitch / magic,
     };
-    
+
     let metrics = calculate_metrics(entries, &best_params);
     (best_params, metrics)
 }
@@ -466,20 +574,20 @@ fn evaluate_loss(entries: &[DataPoint], params: &CalibrationParams) -> f32 {
     let center_x = 1440.0 / 2.0;
     let center_y = 900.0 / 2.0;
     let magic = 20.0;
-    
+
     for e in entries {
         let pred_x = center_x + (e.raw_yaw - params.yaw_offset) * params.yaw_gain * magic;
         let pred_y = center_y + (e.raw_pitch - params.pitch_offset) * params.pitch_gain * magic; // Corrected sign error in GD derivation above?
-        // Wait, derivation: sy = cy + ((raw_pitch - po) * pg) * magic
-        // In Gaze.rs: sy -= pitch * 20.0
-        // pitch = -(raw - off) * gain
-        // sy -= (-(raw - off) * gain) * 20.0
-        // sy += (raw - off) * gain * 20.0
-        // Derivation matches.
-        
+                                                                                                 // Wait, derivation: sy = cy + ((raw_pitch - po) * pg) * magic
+                                                                                                 // In Gaze.rs: sy -= pitch * 20.0
+                                                                                                 // pitch = -(raw - off) * gain
+                                                                                                 // sy -= (-(raw - off) * gain) * 20.0
+                                                                                                 // sy += (raw - off) * gain * 20.0
+                                                                                                 // Derivation matches.
+
         let err_x = pred_x - e.target_x;
         let err_y = pred_y - e.target_y;
-        total_loss += err_x*err_x + err_y*err_y;
+        total_loss += err_x * err_x + err_y * err_y;
     }
     total_loss / entries.len() as f32
 }
@@ -492,29 +600,31 @@ fn calculate_metrics(entries: &[DataPoint], params: &CalibrationParams) -> Calib
     let magic = 20.0;
 
     for e in entries {
-         // Polynomial Evaluation
-         let y = e.raw_yaw;
-         let p = e.raw_pitch;
-         
-         let pred_x = center_x + (params.yaw_curve * y * y + params.yaw_gain * y + params.yaw_offset) * magic;
-         // Pitch logic: p_gained = -(poly(p)). ScreenY = CenterY - p_gained*20 = CenterY + poly(p)*20.
-         // Solver solves for TgtY - CenterY.
-         let pred_y = center_y + (params.pitch_curve * p * p + params.pitch_gain * p + params.pitch_offset) * magic;
-         
-         let dx = pred_x - e.target_x;
-         let dy = pred_y - e.target_y;
-         let dist = (dx*dx + dy*dy).sqrt();
-         
-         total_error += dist;
-         errors.push(dist);
+        // Polynomial Evaluation
+        let y = e.raw_yaw;
+        let p = e.raw_pitch;
+
+        let pred_x =
+            center_x + (params.yaw_curve * y * y + params.yaw_gain * y + params.yaw_offset) * magic;
+        // Pitch logic: p_gained = -(poly(p)). ScreenY = CenterY - p_gained*20 = CenterY + poly(p)*20.
+        // Solver solves for TgtY - CenterY.
+        let pred_y = center_y
+            + (params.pitch_curve * p * p + params.pitch_gain * p + params.pitch_offset) * magic;
+
+        let dx = pred_x - e.target_x;
+        let dy = pred_y - e.target_y;
+        let dist = (dx * dx + dy * dy).sqrt();
+
+        total_error += dist;
+        errors.push(dist);
     }
-    
+
     let n = entries.len() as f32;
     let mean = total_error / n;
     let variance = errors.iter().map(|e| (e - mean).powi(2)).sum::<f32>() / n;
     let std_dev = variance.sqrt();
-    let max_error = errors.iter().cloned().fold(0.0/0.0, f32::max); // NaN safe max
-    
+    let max_error = errors.iter().cloned().fold(0.0 / 0.0, f32::max); // NaN safe max
+
     CalibrationMetrics {
         mean_error_px: mean,
         std_dev_px: std_dev,
@@ -532,46 +642,56 @@ fn evaluate_and_report(
     model_name: &str,
     dataset: &[DataPoint],
     params: &CalibrationParams,
-    cx: f32, 
-    cy: f32
+    cx: f32,
+    cy: f32,
 ) -> (CalibrationMetrics, DetailedReport) {
     let mut total_sq_error = 0.0;
     let mut max_errors = 0.0;
     let mut total_error = 0.0;
-    
+
     // Histogram buckets
     let mut hist_0_50 = 0;
     let mut hist_50_100 = 0;
     let mut hist_100_200 = 0;
     let mut hist_200_500 = 0;
     let mut hist_500_plus = 0;
-    
+
     let magic = 20.0;
     let mut report_entries = Vec::new();
-    
+
     for e in dataset {
         // Polynomial Evaluation
         let y = e.raw_yaw;
         let p = e.raw_pitch;
-        
-        let pred_x_px = cx + (params.yaw_curve * y * y + params.yaw_gain * y + params.yaw_offset) * magic;
-        let pred_y_px = cy + (params.pitch_curve * p * p + params.pitch_gain * p + params.pitch_offset) * magic;
-        
+
+        let pred_x_px =
+            cx + (params.yaw_curve * y * y + params.yaw_gain * y + params.yaw_offset) * magic;
+        let pred_y_px =
+            cy + (params.pitch_curve * p * p + params.pitch_gain * p + params.pitch_offset) * magic;
+
         let dx = pred_x_px - e.target_x;
         let dy = pred_y_px - e.target_y;
-        let dist = (dx*dx + dy*dy).sqrt(); // L2 euclidean
-        
+        let dist = (dx * dx + dy * dy).sqrt(); // L2 euclidean
+
         total_sq_error += dist * dist;
         total_error += dist;
-        if dist > max_errors { max_errors = dist; }
-        
-        if dist < 50.0 { hist_0_50 += 1; }
-        else if dist < 100.0 { hist_50_100 += 1; }
-        else if dist < 200.0 { hist_100_200 += 1; }
-        else if dist < 500.0 { hist_200_500 += 1; }
-        else { hist_500_plus += 1; }
+        if dist > max_errors {
+            max_errors = dist;
+        }
 
-        let diag = (cx*2.0 * cx*2.0 + cy*2.0 * cy*2.0).sqrt();
+        if dist < 50.0 {
+            hist_0_50 += 1;
+        } else if dist < 100.0 {
+            hist_50_100 += 1;
+        } else if dist < 200.0 {
+            hist_100_200 += 1;
+        } else if dist < 500.0 {
+            hist_200_500 += 1;
+        } else {
+            hist_500_plus += 1;
+        }
+
+        let diag = (cx * 2.0 * cx * 2.0 + cy * 2.0 * cy * 2.0).sqrt();
         let pct = (dist / diag) * 100.0;
 
         report_entries.push(ReportEntry {
@@ -586,27 +706,42 @@ fn evaluate_and_report(
             error_percent: pct,
         });
     }
-    
+
     let n = dataset.len() as f32;
     let mean = total_error / n;
     let variance = (total_sq_error / n) - (mean * mean);
     let std_dev = variance.sqrt();
 
     let histogram = vec![
-        HistogramBin { range: "0-50px".to_string(), count: hist_0_50 },
-        HistogramBin { range: "50-100px".to_string(), count: hist_50_100 },
-        HistogramBin { range: "100-200px".to_string(), count: hist_100_200 },
-        HistogramBin { range: "200-500px".to_string(), count: hist_200_500 },
-        HistogramBin { range: "500px+".to_string(), count: hist_500_plus },
+        HistogramBin {
+            range: "0-50px".to_string(),
+            count: hist_0_50,
+        },
+        HistogramBin {
+            range: "50-100px".to_string(),
+            count: hist_50_100,
+        },
+        HistogramBin {
+            range: "100-200px".to_string(),
+            count: hist_100_200,
+        },
+        HistogramBin {
+            range: "200-500px".to_string(),
+            count: hist_200_500,
+        },
+        HistogramBin {
+            range: "500px+".to_string(),
+            count: hist_500_plus,
+        },
     ];
-    
+
     let metrics = CalibrationMetrics {
         mean_error_px: mean,
         std_dev_px: std_dev,
         max_error_px: max_errors,
         histogram: histogram.clone(),
     };
-    
+
     let report = DetailedReport {
         run_id: run_id.to_string(),
         timestamp: Local::now().to_rfc3339(),
@@ -619,7 +754,7 @@ fn evaluate_and_report(
         },
         entries: report_entries,
     };
-    
+
     (metrics, report)
 }
 
@@ -633,23 +768,23 @@ use rand::Rng;
 fn augment_image(img: &DynamicImage) -> DynamicImage {
     let mut rng = rand::thread_rng();
     let mut buffer = img.to_rgb8();
-    
+
     // 1. Brightness Jitter (+/- 30)
     let brightness_offset: i16 = rng.gen_range(-30..30);
-    
+
     // 2. Gaussian Noise (Approx via Uniform)
     // Sensor noise is typically small, +/- 10 values
-    
+
     for pixel in buffer.pixels_mut() {
         let r = pixel[0] as i16 + brightness_offset + rng.gen_range(-10..10);
         let g = pixel[1] as i16 + brightness_offset + rng.gen_range(-10..10);
         let b = pixel[2] as i16 + brightness_offset + rng.gen_range(-10..10);
-        
+
         pixel[0] = r.clamp(0, 255) as u8;
         pixel[1] = g.clamp(0, 255) as u8;
         pixel[2] = b.clamp(0, 255) as u8;
     }
-    
+
     DynamicImage::ImageRgb8(buffer)
 }
 
@@ -657,17 +792,17 @@ fn main() -> anyhow::Result<()> {
     let mut config = AppConfig::load()?;
     let data_dir = Path::new("calibration_data");
     let reports_dir = data_dir.join("reports");
-    
+
     // Ensure reports dir exists
     if !reports_dir.exists() {
         fs::create_dir_all(&reports_dir)?;
     }
-    
+
     let history_file = reports_dir.join("calibration_history.json");
-    
+
     let run_id = Local::now().format("%Y%m%d_%H%M%S").to_string();
     println!("Starting Calibration Run: {}", run_id);
-    
+
     // 1. Load History
     let mut history: CalibrationHistory = if history_file.exists() {
         let content = fs::read_to_string(&history_file)?;
@@ -675,7 +810,7 @@ fn main() -> anyhow::Result<()> {
     } else {
         Vec::new()
     };
-    
+
     // 2. Gather Data (same as before)
     // 2. Gather Data (Replaced by Samples Logic below)
     let screen_w = 1440.0;
@@ -686,23 +821,23 @@ fn main() -> anyhow::Result<()> {
     // 3. Collect Datasets (L2CS & Mobile)
     let mut dataset_l2cs = Vec::new();
     let mut dataset_mobile = Vec::new();
-    
+
     // Helper to collect inference data
     // We assume data_dir has pairs of .jpg and .json
     let mut samples: Vec<(PathBuf, PathBuf)> = Vec::new();
     if data_dir.exists() {
-         for entry in std::fs::read_dir(data_dir)? {
-             let entry = entry?;
-             let path = entry.path();
-             if path.extension().and_then(|s| s.to_str()) == Some("json") {
-                  let img_path = path.with_extension("jpg");
-                  if img_path.exists() {
-                      samples.push((img_path, path));
-                  }
-             }
-         }
+        for entry in std::fs::read_dir(data_dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.extension().and_then(|s| s.to_str()) == Some("json") {
+                let img_path = path.with_extension("jpg");
+                if img_path.exists() {
+                    samples.push((img_path, path));
+                }
+            }
+        }
     }
-    
+
     // L2CS Inference
     {
         let mut l2cs = L2CSPipeline::new(
@@ -711,18 +846,24 @@ fn main() -> anyhow::Result<()> {
             &config.models.face_detection_path,
         )?;
         l2cs.params = CalibrationParams {
-            yaw_offset: 0.0, pitch_offset: 0.0,
-            yaw_gain: 1.0, pitch_gain: 1.0, 
-            yaw_curve: 0.0, pitch_curve: 0.0,
+            yaw_offset: 0.0,
+            pitch_offset: 0.0,
+            yaw_gain: 1.0,
+            pitch_gain: 1.0,
+            yaw_curve: 0.0,
+            pitch_curve: 0.0,
         };
-        
+
         println!("Running L2CS Inference (1 pass)...");
         for (img_path, json_path) in &samples {
             let json_str = fs::read_to_string(json_path)?;
             let meta: JsonMeta = serde_json::from_str(&json_str)?;
-            let original_img = ImageReader::open(img_path)?.with_guessed_format()?.decode()?.to_rgb8();
+            let original_img = ImageReader::open(img_path)?
+                .with_guessed_format()?
+                .decode()?
+                .to_rgb8();
             let original_dynamic = DynamicImage::ImageRgb8(original_img);
-            
+
             // Monte Carlo: 20 Iterations
             for i in 0..20 {
                 let img_to_process = if i == 0 {
@@ -730,19 +871,19 @@ fn main() -> anyhow::Result<()> {
                 } else {
                     augment_image(&original_dynamic)
                 };
-                
+
                 let img_rgb = img_to_process.to_rgb8();
-            
+
                 if let Ok(Some(output)) = l2cs.process_raw_values(&img_rgb) {
-                     if let rusty_eyes::types::PipelineOutput::Gaze { yaw, pitch, .. } = output {
-                         dataset_l2cs.push(DataPoint {
-                             filename: img_path.file_name().unwrap().to_string_lossy().to_string(),
-                             raw_yaw: yaw, 
-                             raw_pitch: pitch, 
-                             target_x: meta.screen_x,
-                             target_y: meta.screen_y,
-                         });
-                     }
+                    if let rusty_eyes::types::PipelineOutput::Gaze { yaw, pitch, .. } = output {
+                        dataset_l2cs.push(DataPoint {
+                            filename: img_path.file_name().unwrap().to_string_lossy().to_string(),
+                            raw_yaw: yaw,
+                            raw_pitch: pitch,
+                            target_x: meta.screen_x,
+                            target_y: meta.screen_y,
+                        });
+                    }
                 }
             }
             print!(".");
@@ -760,18 +901,24 @@ fn main() -> anyhow::Result<()> {
             &config.models.face_detection_path,
         )?;
         mobile.params = CalibrationParams {
-            yaw_offset: 0.0, pitch_offset: 0.0,
-            yaw_gain: 1.0, pitch_gain: 1.0,
-            yaw_curve: 0.0, pitch_curve: 0.0,
+            yaw_offset: 0.0,
+            pitch_offset: 0.0,
+            yaw_gain: 1.0,
+            pitch_gain: 1.0,
+            yaw_curve: 0.0,
+            pitch_curve: 0.0,
         };
-        
+
         println!("Running Mobile Inference (1 pass)...");
         for (img_path, json_path) in &samples {
             let json_str = fs::read_to_string(json_path)?;
             let meta: JsonMeta = serde_json::from_str(&json_str)?;
-            let original_img = ImageReader::open(img_path)?.with_guessed_format()?.decode()?.to_rgb8();
+            let original_img = ImageReader::open(img_path)?
+                .with_guessed_format()?
+                .decode()?
+                .to_rgb8();
             let original_dynamic = DynamicImage::ImageRgb8(original_img);
-            
+
             // Monte Carlo: 20 Iterations
             // 1 Original + 19 Augmented
             for i in 0..20 {
@@ -780,21 +927,21 @@ fn main() -> anyhow::Result<()> {
                 } else {
                     augment_image(&original_dynamic)
                 };
-                
+
                 let img_rgb = img_to_process.to_rgb8();
-            
+
                 if let Ok(Some(output)) = mobile.process_raw_values(&img_rgb) {
-                     if let rusty_eyes::types::PipelineOutput::Gaze { yaw, pitch, .. } = output {
-                         // Mobile raw output needs internal inversion? 
-                         // Recent fix in gaze.rs inverted it. 
-                         dataset_mobile.push(DataPoint {
-                             filename: img_path.file_name().unwrap().to_string_lossy().to_string(),
-                             raw_yaw: yaw, 
-                             raw_pitch: pitch, 
-                             target_x: meta.screen_x,
-                             target_y: meta.screen_y,
-                         });
-                     }
+                    if let rusty_eyes::types::PipelineOutput::Gaze { yaw, pitch, .. } = output {
+                        // Mobile raw output needs internal inversion?
+                        // Recent fix in gaze.rs inverted it.
+                        dataset_mobile.push(DataPoint {
+                            filename: img_path.file_name().unwrap().to_string_lossy().to_string(),
+                            raw_yaw: yaw,
+                            raw_pitch: pitch,
+                            target_x: meta.screen_x,
+                            target_y: meta.screen_y,
+                        });
+                    }
                 }
             }
             print!(".");
@@ -805,29 +952,36 @@ fn main() -> anyhow::Result<()> {
     }
 
     // 4. Optimize & Process Reports
-    let process_model = |
-        name: &str, 
-        dataset: &[DataPoint], 
-        history: &mut CalibrationHistory, 
-        cfg_map: &mut HashMap<String, CalibrationParams>
-    | -> anyhow::Result<()> {
-        if dataset.is_empty() { return Ok(()); }
-        
+    let process_model = |name: &str,
+                         dataset: &[DataPoint],
+                         history: &mut CalibrationHistory,
+                         cfg_map: &mut HashMap<String, CalibrationParams>|
+     -> anyhow::Result<()> {
+        if dataset.is_empty() {
+            return Ok(());
+        }
+
         println!("Optimizing {}...", name);
         let (mut params, _opt_metrics) = optimize_params(dataset, name);
-        
+
         // Train SVR (Side-effect: saves .model files)
         if let Err(e) = train_svr_model(dataset, name) {
             eprintln!("Warning: Failed to train SVR for {}: {}", name, e);
         }
-        
+
         // STRATEGIC BOOST: Detect Head Turn and Boost Sensitivity for Eye Comfort
         if name == "l2cs" {
-            let min_yaw = dataset.iter().map(|p| p.raw_yaw).fold(f32::INFINITY, f32::min);
-            let max_yaw = dataset.iter().map(|p| p.raw_yaw).fold(f32::NEG_INFINITY, f32::max);
+            let min_yaw = dataset
+                .iter()
+                .map(|p| p.raw_yaw)
+                .fold(f32::INFINITY, f32::min);
+            let max_yaw = dataset
+                .iter()
+                .map(|p| p.raw_yaw)
+                .fold(f32::NEG_INFINITY, f32::max);
             let range = max_yaw - min_yaw;
             println!("Detected Yaw Range: {:.1} degrees", range);
-            
+
             if range > 30.0 {
                 let comfortable_range = 20.0;
                 let boost = range / comfortable_range;
@@ -838,9 +992,12 @@ fn main() -> anyhow::Result<()> {
         }
 
         let (metrics, report) = evaluate_and_report(&run_id, name, dataset, &params, cx, cy);
-        
-        println!("{} Results (Boosted): MeanErr={:.2}px, StdDev={:.2}px", name, metrics.mean_error_px, metrics.std_dev_px);
-        
+
+        println!(
+            "{} Results (Boosted): MeanErr={:.2}px, StdDev={:.2}px",
+            name, metrics.mean_error_px, metrics.std_dev_px
+        );
+
         // Save Run to History
         let run = CalibrationRun {
             run_id: run_id.clone(),
@@ -850,28 +1007,38 @@ fn main() -> anyhow::Result<()> {
             metrics: metrics.clone(),
         };
         history.push(run.clone());
-        
+
         // Save Report File
         let report_name = format!("calibration_report_{}_{}.json", name, run_id);
         let report_path = reports_dir.join(report_name);
         fs::write(&report_path, serde_json::to_string_pretty(&report)?)?;
         println!("Saved report to {:?}", report_path);
-        
+
         // Always update best model with this run for now (since we applied manual boost)
         cfg_map.insert(name.to_string(), params.clone());
-        
+
         Ok(())
     };
 
-    process_model("l2cs", &dataset_l2cs, &mut history, &mut config.calibration.models)?;
-    process_model("mobile", &dataset_mobile, &mut history, &mut config.calibration.models)?;
-    
+    process_model(
+        "l2cs",
+        &dataset_l2cs,
+        &mut history,
+        &mut config.calibration.models,
+    )?;
+    process_model(
+        "mobile",
+        &dataset_mobile,
+        &mut history,
+        &mut config.calibration.models,
+    )?;
+
     // 5. Save State
     fs::write(&history_file, serde_json::to_string_pretty(&history)?)?;
     println!("Updated history at {:?}", history_file);
-    
+
     config.save()?;
     println!("Updated config.json with best parameters.");
-    
+
     Ok(())
 }

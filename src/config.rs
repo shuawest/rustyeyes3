@@ -1,8 +1,8 @@
+use crate::rectification::CalibrationConfig;
+use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
-use anyhow::{Result, Context};
-use crate::rectification::CalibrationConfig;
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(default)]
@@ -24,7 +24,7 @@ pub struct Defaults {
     pub show_overlay: bool,
     pub moondream_active: bool,
     // New Params
-    pub head_pose_length: f32, 
+    pub head_pose_length: f32,
     pub remote_dgx_url: Option<String>,
 }
 
@@ -101,7 +101,6 @@ impl Default for AppConfig {
 impl AppConfig {
     pub const DEFAULT_CONFIG_PATH: &str = "config.json";
 
-
     pub fn load() -> Result<Self> {
         let config_path = Path::new(Self::DEFAULT_CONFIG_PATH);
         let mut config: AppConfig = if config_path.exists() {
@@ -110,34 +109,37 @@ impl AppConfig {
                 Ok(c) => {
                     println!("Loaded configuration from {}", Self::DEFAULT_CONFIG_PATH);
                     c
-                },
+                }
                 Err(e) => {
                     println!("Failed to parse config: {}. Loading defaults.", e);
-                    AppConfig::default() 
+                    AppConfig::default()
                 }
             }
         } else {
-            println!("Configuration file not found. Creating default at {}", Self::DEFAULT_CONFIG_PATH);
+            println!(
+                "Configuration file not found. Creating default at {}",
+                Self::DEFAULT_CONFIG_PATH
+            );
             let defaults = AppConfig::default();
-            
+
             // Write defaults to disk
             if let Ok(content) = serde_json::to_string_pretty(&defaults) {
                 let _ = fs::write(Self::DEFAULT_CONFIG_PATH, content);
             }
-            
+
             defaults
         };
-        
+
         // Save if we just created defaults (redundant but safe)
         if !Path::new(Self::DEFAULT_CONFIG_PATH).exists() {
-             if let Ok(content) = serde_json::to_string_pretty(&config) {
-                 let _ = fs::write(Self::DEFAULT_CONFIG_PATH, content);
-             }
+            if let Ok(content) = serde_json::to_string_pretty(&config) {
+                let _ = fs::write(Self::DEFAULT_CONFIG_PATH, content);
+            }
         }
-        
+
         // Always save back to ensure new fields are populated in the file
         config.save()?;
-        
+
         Ok(config)
     }
 

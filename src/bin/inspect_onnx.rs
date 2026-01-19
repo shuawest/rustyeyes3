@@ -1,6 +1,6 @@
+use anyhow::Result;
 use ort::session::builder::GraphOptimizationLevel;
 use ort::session::Session;
-use anyhow::Result;
 use std::env;
 
 fn main() -> Result<()> {

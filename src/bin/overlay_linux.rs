@@ -1,15 +1,15 @@
-use winit::application::ApplicationHandler;
-use winit::event::WindowEvent;
-use winit::event_loop::{ActiveEventLoop, EventLoop, EventLoopProxy};
-use winit::window::{Window, WindowId, WindowAttributes, WindowLevel};
-use winit::keyboard::{Key, NamedKey};
-use winit::dpi::LogicalSize;
+use rusttype::{Font, Point, PositionedGlyph, Scale};
 use softbuffer::{Context, Surface};
-use std::sync::Arc;
-use std::thread;
 use std::io::{self, BufRead};
 use std::num::NonZeroU32;
-use rusttype::{Font, Scale, Point, PositionedGlyph};
+use std::sync::Arc;
+use std::thread;
+use winit::application::ApplicationHandler;
+use winit::dpi::LogicalSize;
+use winit::event::WindowEvent;
+use winit::event_loop::{ActiveEventLoop, EventLoop, EventLoopProxy};
+use winit::keyboard::{Key, NamedKey};
+use winit::window::{Window, WindowAttributes, WindowId, WindowLevel};
 
 #[cfg(target_os = "linux")]
 use winit::platform::x11::WindowAttributesExtX11;
@@ -31,7 +31,7 @@ struct AppState {
     window: Option<Arc<Window>>,
     surface: Option<Surface<Arc<Window>, Arc<Window>>>,
     context: Option<Context<Arc<Window>>>,
-    
+
     // Data State
     gaze_pos: Option<(f32, f32)>,
     moondream_pos: Option<(f32, f32)>,
@@ -39,11 +39,11 @@ struct AppState {
     pending_pos: Option<(f32, f32)>,
     face_mesh: Option<Vec<(f32, f32)>>,
     menu_text: String,
-    
+
     // Font State
     font: Option<Font<'static>>,
     font_size: f32,
-    
+
     // Proxy to wake up event loop
     proxy: EventLoopProxy<UserEvent>,
 }
@@ -51,9 +51,9 @@ struct AppState {
 impl AppState {
     fn new(proxy: EventLoopProxy<UserEvent>) -> Self {
         // Load default font (embedded or system fallback)
-        // let font_data = include_bytes!("../../models/font.ttf"); 
-        // We don't have this packaged, fallback to simple drawing if needed? 
-        
+        // let font_data = include_bytes!("../../models/font.ttf");
+        // We don't have this packaged, fallback to simple drawing if needed?
+
         Self {
             window: None,
             surface: None,
@@ -69,20 +69,24 @@ impl AppState {
             proxy,
         }
     }
-    
+
     fn redraw(&mut self) {
         if let (Some(window), Some(surface)) = (&self.window, &mut self.surface) {
             let (width, height) = {
                 let size = window.inner_size();
                 (size.width, size.height)
             };
-            
-            if width == 0 || height == 0 { return; }
 
-            surface.resize(
-                NonZeroU32::new(width).unwrap(),
-                NonZeroU32::new(height).unwrap(),
-            ).unwrap();
+            if width == 0 || height == 0 {
+                return;
+            }
+
+            surface
+                .resize(
+                    NonZeroU32::new(width).unwrap(),
+                    NonZeroU32::new(height).unwrap(),
+                )
+                .unwrap();
 
             let mut buffer = surface.buffer_mut().unwrap();
 
@@ -91,7 +95,7 @@ impl AppState {
 
             // Grid: Draw thin grey lines every 100px
             let grid_color = 0x00808080; // Grey (0RGB format)
-            
+
             // Vertical lines
             for x in (0..width).step_by(100) {
                 for y in 0..height {
@@ -101,7 +105,7 @@ impl AppState {
                     }
                 }
             }
-            
+
             // Horizontal lines
             for y in (0..height).step_by(100) {
                 for x in 0..width {
@@ -119,18 +123,18 @@ impl AppState {
                 let max_x = (cx + r) as i32;
                 let min_y = (cy - r) as i32;
                 let max_y = (cy + r) as i32;
-                
+
                 for py in min_y..=max_y {
-                     for px in min_x..=max_x {
-                         if px >= 0 && px < width as i32 && py >= 0 && py < height as i32 {
-                             let dx = px as f32 - cx;
-                             let dy = py as f32 - cy;
-                             if dx*dx + dy*dy <= r_sq {
-                                  let idx = py as usize * width as usize + px as usize;
-                                  buffer[idx] = color;
-                             }
-                         }
-                     }
+                    for px in min_x..=max_x {
+                        if px >= 0 && px < width as i32 && py >= 0 && py < height as i32 {
+                            let dx = px as f32 - cx;
+                            let dy = py as f32 - cy;
+                            if dx * dx + dy * dy <= r_sq {
+                                let idx = py as usize * width as usize + px as usize;
+                                buffer[idx] = color;
+                            }
+                        }
+                    }
                 }
             };
 
@@ -140,76 +144,78 @@ impl AppState {
                 draw_circle(gx, gy, 15.0, 0x000000FF); // Blue
                 draw_circle(gx, gy, 5.0, 0x00FF0000); // Red center
             }
-            
+
             // 3. Draw Moondream (Cyan)
             if let Some((mx, my)) = self.moondream_pos {
-                 draw_circle(mx, my, 12.0, 0x0000FFFF); // Cyan
-                 draw_circle(mx, my, 4.0, 0x00FFFF00); // Yellow center
+                draw_circle(mx, my, 12.0, 0x0000FFFF); // Cyan
+                draw_circle(mx, my, 4.0, 0x00FFFF00); // Yellow center
             }
-            
-             // 4. Draw Verified (Green/Yellow)
+
+            // 4. Draw Verified (Green/Yellow)
             if let Some((vx, vy)) = self.verified_pos {
-                 draw_circle(vx, vy, 10.0, 0x0000FF00); // Green
-                 draw_circle(vx, vy, 3.0, 0x00FFFF00); // Yellow
+                draw_circle(vx, vy, 10.0, 0x0000FF00); // Green
+                draw_circle(vx, vy, 3.0, 0x00FFFF00); // Yellow
             }
-            
-             // 5. Draw Pending (Green/Red)
+
+            // 5. Draw Pending (Green/Red)
             if let Some((px, py)) = self.pending_pos {
-                 draw_circle(px, py, 10.0, 0x0000FF00); // Green
-                 draw_circle(px, py, 3.0, 0x00FF0000); // Red
+                draw_circle(px, py, 10.0, 0x0000FF00); // Green
+                draw_circle(px, py, 3.0, 0x00FF0000); // Red
             }
 
             // 5.5 Draw Face Mesh (White/Red dots)
             if let Some(mesh) = &self.face_mesh {
-                 let mesh_color = 0x00FF0000; // Red for visibility
-                 for (mx, my) in mesh {
-                      draw_circle(*mx, *my, 2.0, mesh_color);
-                 }
+                let mesh_color = 0x00FF0000; // Red for visibility
+                for (mx, my) in mesh {
+                    draw_circle(*mx, *my, 2.0, mesh_color);
+                }
             }
 
             // 6. Draw Menu Text
-            // Simple bitmap font fallback if no ttf, or just rely on console? 
-            // Implementing a full font renderer is heavy. 
+            // Simple bitmap font fallback if no ttf, or just rely on console?
+            // Implementing a full font renderer is heavy.
             // We can draw a simple "box" for text present.
             // OR use a minimal embedded font.
             // For now, let's just log it? No, needs to be visible.
-            // Let's implement basic "Text" using block characters? 
+            // Let's implement basic "Text" using block characters?
             // A challenge.
-            
+
             // Let's try to load a system font or just skip text for MVP?
             // "The user should be wowed". Text is needed.
             // We can use `rusttype`. We need a font file.
             // Let's assume user has /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf or similar?
             if let Some(font) = &self.font {
-                 // Draw text
-                 let scale = Scale::uniform(self.font_size);
-                 let _v_metrics = font.v_metrics(scale);
-                 
-                 let lines: Vec<&str> = self.menu_text.split('|').collect();
-                 let start_y = height as f32 - (lines.len() as f32 * self.font_size * 1.5) - 20.0;
-                 let start_x = 20.0;
-                 
-                 for (i, line) in lines.iter().enumerate() {
-                      let y = start_y + (i as f32 * self.font_size * 1.5);
-                      
-                      let glyphs: Vec<PositionedGlyph> = font.layout(line, scale, Point { x: start_x, y }).collect();
-                      
-                      for glyph in glyphs {
-                          if let Some(bb) = glyph.pixel_bounding_box() {
-                              glyph.draw(|x, y, v| {
-                                   // v is alpha 0..1
-                                   if v > 0.5 {
-                                        let px = x as i32 + bb.min.x;
-                                        let py = y as i32 + bb.min.y;
-                                         if px >= 0 && px < width as i32 && py >= 0 && py < height as i32 {
-                                             let idx = py as usize * width as usize + px as usize;
-                                             buffer[idx] = 0x00FFFFFF; // White (0RGB)
-                                        }
-                                   }
-                              });
-                          }
-                      }
-                 }
+                // Draw text
+                let scale = Scale::uniform(self.font_size);
+                let _v_metrics = font.v_metrics(scale);
+
+                let lines: Vec<&str> = self.menu_text.split('|').collect();
+                let start_y = height as f32 - (lines.len() as f32 * self.font_size * 1.5) - 20.0;
+                let start_x = 20.0;
+
+                for (i, line) in lines.iter().enumerate() {
+                    let y = start_y + (i as f32 * self.font_size * 1.5);
+
+                    let glyphs: Vec<PositionedGlyph> =
+                        font.layout(line, scale, Point { x: start_x, y }).collect();
+
+                    for glyph in glyphs {
+                        if let Some(bb) = glyph.pixel_bounding_box() {
+                            glyph.draw(|x, y, v| {
+                                // v is alpha 0..1
+                                if v > 0.5 {
+                                    let px = x as i32 + bb.min.x;
+                                    let py = y as i32 + bb.min.y;
+                                    if px >= 0 && px < width as i32 && py >= 0 && py < height as i32
+                                    {
+                                        let idx = py as usize * width as usize + px as usize;
+                                        buffer[idx] = 0x00FFFFFF; // White (0RGB)
+                                    }
+                                }
+                            });
+                        }
+                    }
+                }
             }
 
             buffer.present().unwrap();
@@ -230,10 +236,11 @@ impl ApplicationHandler<UserEvent> for App {
         #[cfg(target_os = "linux")]
         let win_attr = {
             // Try to get primary monitor size, fallback to large default
-            let monitor_size = event_loop.primary_monitor()
+            let monitor_size = event_loop
+                .primary_monitor()
                 .map(|m| m.size())
                 .unwrap_or_else(|| winit::dpi::PhysicalSize::new(1920, 1080));
-            
+
             WindowAttributes::default()
                 .with_title("Rusty Eyes Overlay")
                 .with_transparent(true)
@@ -243,7 +250,7 @@ impl ApplicationHandler<UserEvent> for App {
                 // X11-specific: Prevent window from accepting input focus
                 .with_override_redirect(true)
         };
-        
+
         #[cfg(not(target_os = "linux"))]
         let win_attr = {
             WindowAttributes::default()
@@ -253,38 +260,40 @@ impl ApplicationHandler<UserEvent> for App {
                 .with_window_level(WindowLevel::AlwaysOnTop)
                 .with_inner_size(LogicalSize::new(1440.0, 900.0))
         };
-        
+
         let window = event_loop.create_window(win_attr).unwrap();
-        
+
         // Set cursor passthrough for click-through behavior
         let _ = window.set_cursor_hittest(false);
-        
+
         // Additional X11 setup for input pass-through
         #[cfg(target_os = "linux")]
         {
-            use winit::raw_window_handle::{HasWindowHandle, HasDisplayHandle, RawWindowHandle, RawDisplayHandle};
-            
+            use winit::raw_window_handle::{
+                HasDisplayHandle, HasWindowHandle, RawDisplayHandle, RawWindowHandle,
+            };
+
             // Get X11 display and window
-            if let (Ok(window_handle), Ok(display_handle)) = (window.window_handle(), window.display_handle()) {
-                if let (RawWindowHandle::Xlib(xlib_window), RawDisplayHandle::Xlib(xlib_display)) = 
-                    (window_handle.as_raw(), display_handle.as_raw()) 
+            if let (Ok(window_handle), Ok(display_handle)) =
+                (window.window_handle(), window.display_handle())
+            {
+                if let (RawWindowHandle::Xlib(xlib_window), RawDisplayHandle::Xlib(xlib_display)) =
+                    (window_handle.as_raw(), display_handle.as_raw())
                 {
                     unsafe {
                         use x11::xlib;
                         // Get display from the display handle
-                        let display = xlib_display.display.expect("X11 display is None").as_ptr() as *mut xlib::Display;
+                        let display = xlib_display.display.expect("X11 display is None").as_ptr()
+                            as *mut xlib::Display;
                         let window_id = xlib_window.window;
-                        
+
                         // Create an empty input region to make window fully transparent to input
-                        let region = x11::xfixes::XFixesCreateRegion(display, std::ptr::null_mut(), 0);
+                        let region =
+                            x11::xfixes::XFixesCreateRegion(display, std::ptr::null_mut(), 0);
                         // ShapeInput = 2 (from X11 Shape extension constants)
                         x11::xfixes::XFixesSetWindowShapeRegion(
-                            display,
-                            window_id,
-                            2, // ShapeInput
-                            0,
-                            0,
-                            region,
+                            display, window_id, 2, // ShapeInput
+                            0, 0, region,
                         );
                         x11::xfixes::XFixesDestroyRegion(display, region);
                         xlib::XFlush(display);
@@ -293,9 +302,9 @@ impl ApplicationHandler<UserEvent> for App {
             }
         }
         // let _ = window.set_ignore_cursor_events(true); // Deprecated/Removed in 0.30
-        
+
         let window = Arc::new(window);
-    
+
         // Setup Softbuffer
         // Context::new needs a reference to window which implements HasDisplayHandle
         // Arc<Window> implements it? Yes.
@@ -304,25 +313,25 @@ impl ApplicationHandler<UserEvent> for App {
         let surface = Surface::new(&context, window.clone()).unwrap();
 
         self.state.window = Some(window.clone());
-        // self.state.context = Some(context); // Softbuffer context is not easily stored? 
+        // self.state.context = Some(context); // Softbuffer context is not easily stored?
         // Actually it is.
         self.state.context = Some(context);
         self.state.surface = Some(surface);
-        
+
         // Try to load a default font from typical Linux paths
         let paths = [
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
             "/usr/share/fonts/TTF/DejaVuSans.ttf",
-            "/usr/share/fonts/liberation/LiberationSans-Regular.ttf"
+            "/usr/share/fonts/liberation/LiberationSans-Regular.ttf",
         ];
-        
+
         for p in paths {
-             if let Ok(data) = std::fs::read(p) {
-                 if let Some(f) = Font::try_from_vec(data) {
-                      self.state.font = Some(f);
-                      break;
-                 }
-             }
+            if let Ok(data) = std::fs::read(p) {
+                if let Some(f) = Font::try_from_vec(data) {
+                    self.state.font = Some(f);
+                    break;
+                }
+            }
         }
     }
 
@@ -337,17 +346,17 @@ impl ApplicationHandler<UserEvent> for App {
             _ => (),
         }
     }
-    
+
     fn user_event(&mut self, _event_loop: &ActiveEventLoop, event: UserEvent) {
         match event {
-             UserEvent::UpdateGaze(x, y) => self.state.gaze_pos = Some((x, y)),
-             UserEvent::UpdateMoondream(x, y) => self.state.moondream_pos = Some((x, y)),
-             UserEvent::UpdateVerified(x, y) => self.state.verified_pos = Some((x, y)),
-             UserEvent::UpdatePending(x, y) => self.state.pending_pos = Some((x, y)),
-             UserEvent::UpdateMesh(points) => self.state.face_mesh = Some(points),
-             UserEvent::UpdateMenu(s) => self.state.menu_text = s,
-             UserEvent::UpdateFont(_f, s) => self.state.font_size = s as f32, // Ignore family for now
-             UserEvent::Quit => std::process::exit(0),
+            UserEvent::UpdateGaze(x, y) => self.state.gaze_pos = Some((x, y)),
+            UserEvent::UpdateMoondream(x, y) => self.state.moondream_pos = Some((x, y)),
+            UserEvent::UpdateVerified(x, y) => self.state.verified_pos = Some((x, y)),
+            UserEvent::UpdatePending(x, y) => self.state.pending_pos = Some((x, y)),
+            UserEvent::UpdateMesh(points) => self.state.face_mesh = Some(points),
+            UserEvent::UpdateMenu(s) => self.state.menu_text = s,
+            UserEvent::UpdateFont(_f, s) => self.state.font_size = s as f32, // Ignore family for now
+            UserEvent::Quit => std::process::exit(0),
         }
         self.state.window.as_ref().unwrap().request_redraw();
     }
@@ -356,7 +365,7 @@ impl ApplicationHandler<UserEvent> for App {
 fn main() -> io::Result<()> {
     let event_loop = EventLoop::<UserEvent>::with_user_event().build().unwrap();
     let proxy = event_loop.create_proxy();
-    
+
     // Stdin Thread
     let proxy_clone = proxy.clone();
     thread::spawn(move || {
@@ -364,64 +373,67 @@ fn main() -> io::Result<()> {
         for line in stdin.lock().lines() {
             if let Ok(l) = line {
                 let parts: Vec<&str> = l.split_whitespace().collect();
-                if parts.is_empty() { continue; }
-                
+                if parts.is_empty() {
+                    continue;
+                }
+
                 match parts[0] {
                     "G" => {
                         if parts.len() >= 3 {
-                             let x = parts[1].parse().unwrap_or(0.0);
-                             let y = parts[2].parse().unwrap_or(0.0);
-                             let _ = proxy_clone.send_event(UserEvent::UpdateGaze(x, y));
+                            let x = parts[1].parse().unwrap_or(0.0);
+                            let y = parts[2].parse().unwrap_or(0.0);
+                            let _ = proxy_clone.send_event(UserEvent::UpdateGaze(x, y));
                         }
-                    },
+                    }
                     "M" => {
                         if parts.len() >= 3 {
-                             let x = parts[1].parse().unwrap_or(0.0);
-                             let y = parts[2].parse().unwrap_or(0.0);
-                             let _ = proxy_clone.send_event(UserEvent::UpdateMoondream(x, y));
+                            let x = parts[1].parse().unwrap_or(0.0);
+                            let y = parts[2].parse().unwrap_or(0.0);
+                            let _ = proxy_clone.send_event(UserEvent::UpdateMoondream(x, y));
                         }
-                    },
-                    "C" => { // Shared for Completed/Verified
+                    }
+                    "C" => {
+                        // Shared for Completed/Verified
                         if parts.len() >= 3 {
-                             let x = parts[1].parse().unwrap_or(0.0);
-                             let y = parts[2].parse().unwrap_or(0.0);
-                             let _ = proxy_clone.send_event(UserEvent::UpdateVerified(x, y));
+                            let x = parts[1].parse().unwrap_or(0.0);
+                            let y = parts[2].parse().unwrap_or(0.0);
+                            let _ = proxy_clone.send_event(UserEvent::UpdateVerified(x, y));
                         }
-                    },
-                     "P" => {
+                    }
+                    "P" => {
                         if parts.len() >= 3 {
-                             let x = parts[1].parse().unwrap_or(0.0);
-                             let y = parts[2].parse().unwrap_or(0.0);
-                             let _ = proxy_clone.send_event(UserEvent::UpdatePending(x, y));
+                            let x = parts[1].parse().unwrap_or(0.0);
+                            let y = parts[2].parse().unwrap_or(0.0);
+                            let _ = proxy_clone.send_event(UserEvent::UpdatePending(x, y));
                         }
-                    },
+                    }
                     "L" => {
                         // L <count> x1 y1 x2 y2 ...
                         if parts.len() >= 2 {
-                             let count: usize = parts[1].parse().unwrap_or(0);
-                             let mut points = Vec::with_capacity(count);
-                             // Start from index 2
-                             let mut i = 2;
-                             while i + 1 < parts.len() {
-                                 let x = parts[i].parse().unwrap_or(0.0);
-                                 let y = parts[i+1].parse().unwrap_or(0.0);
-                                 points.push((x, y));
-                                 i += 2;
-                             }
-                             let _ = proxy_clone.send_event(UserEvent::UpdateMesh(points));
+                            let count: usize = parts[1].parse().unwrap_or(0);
+                            let mut points = Vec::with_capacity(count);
+                            // Start from index 2
+                            let mut i = 2;
+                            while i + 1 < parts.len() {
+                                let x = parts[i].parse().unwrap_or(0.0);
+                                let y = parts[i + 1].parse().unwrap_or(0.0);
+                                points.push((x, y));
+                                i += 2;
+                            }
+                            let _ = proxy_clone.send_event(UserEvent::UpdateMesh(points));
                         }
-                    },
+                    }
                     "S" => {
                         // Rest of line
                         if l.len() > 2 {
-                             let text = l[2..].to_string();
-                             let _ = proxy_clone.send_event(UserEvent::UpdateMenu(text));
+                            let text = l[2..].to_string();
+                            let _ = proxy_clone.send_event(UserEvent::UpdateMenu(text));
                         }
-                    },
+                    }
                     "Q" => {
-                         let _ = proxy_clone.send_event(UserEvent::Quit);
-                         break;
-                    },
+                        let _ = proxy_clone.send_event(UserEvent::Quit);
+                        break;
+                    }
                     _ => {}
                 }
             } else {
@@ -434,6 +446,8 @@ fn main() -> io::Result<()> {
     let mut app = App {
         state: AppState::new(proxy),
     };
-    
-    event_loop.run_app(&mut app).map_err(|e| io::Error::new(io::ErrorKind::Other, e))
+
+    event_loop
+        .run_app(&mut app)
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))
 }

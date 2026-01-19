@@ -1,12 +1,12 @@
 #[cfg(test)]
 mod tests {
-    use crate::gaze::{compute_simulated_gaze, compute_pupil_gaze};
+    use crate::gaze::{compute_pupil_gaze, compute_simulated_gaze};
 
     // =========================================================================
     // Regression Tests: Gaze Direction
     // Convention: Negative Yaw = Look Left (Screen Left)
     // =========================================================================
-    
+
     #[test]
     fn test_simulated_gaze_direction() {
         // DERIVED COORDINATE SYSTEM REASONING:
@@ -15,23 +15,35 @@ mod tests {
         //    Therefore: Head Left input must have been Positive (causing positive yaw -> Screen Right).
         // 3. Fix: We want Head Left (Positive) -> Screen Left (Negative).
         //    So correct logic is Inverted (-).
-        
+
         // Case 1: Head Turned Left (+10 deg)
         // Should result in Gaze Left (< 0)
         let (yaw, _pitch) = compute_simulated_gaze(10.0, 0.0);
-        assert!(yaw < 0.0, "Simulated Gaze: Head Left (+10) produced Yaw {}, expected negative (Left)", yaw);
-        
+        assert!(
+            yaw < 0.0,
+            "Simulated Gaze: Head Left (+10) produced Yaw {}, expected negative (Left)",
+            yaw
+        );
+
         // Case 2: Head Turned Right (-10 deg)
         let (yaw, _pitch) = compute_simulated_gaze(-10.0, 0.0);
-        assert!(yaw > 0.0, "Simulated Gaze: Head Right (-10) produced Yaw {}, expected positive (Right)", yaw);
+        assert!(
+            yaw > 0.0,
+            "Simulated Gaze: Head Right (-10) produced Yaw {}, expected positive (Right)",
+            yaw
+        );
     }
 
     #[test]
     fn test_pupil_gaze_direction() {
         // Case 1: Head Turned Left (+10 deg), Pupil Center
         let (yaw, _pitch) = compute_pupil_gaze(10.0, 0.0, 0.0, 0.0);
-        assert!(yaw < 0.0, "Pupil Gaze: Head Left (+10) produced Yaw {}, expected negative (Left)", yaw);
-        
+        assert!(
+            yaw < 0.0,
+            "Pupil Gaze: Head Left (+10) produced Yaw {}, expected negative (Left)",
+            yaw
+        );
+
         // Case 2: Head Center, Pupil Looking Left
         // If Head Left is Positive, assumes standard axis.
         // Pupil Offset: Usually -0.5 is Left in normalized image coords (0 to 1 or -1 to 1).
@@ -52,9 +64,13 @@ mod tests {
         // User said "Pupil Gaze is opposite".
         // But PupilGaze relies on Head Pose heavily.
         // Let's stick to Head Pose dominance for this test first.
-        
+
         // Case 2: Head Turned Right (-10 deg)
         let (yaw, _pitch) = compute_pupil_gaze(-10.0, 0.0, 0.0, 0.0);
-        assert!(yaw > 0.0, "Pupil Gaze: Head Right (-10) produced Yaw {}, expected positive (Right)", yaw);
+        assert!(
+            yaw > 0.0,
+            "Pupil Gaze: Head Right (-10) produced Yaw {}, expected positive (Right)",
+            yaw
+        );
     }
 }
