@@ -148,10 +148,14 @@ fn main() -> anyhow::Result<()> {
 
     // 3. Setup Output
     // We get the actual format from the camera
-    let width = camera.width();
-    let height = camera.height();
-    let mut window = WindowOutput::new("Rusty Eyes", width as usize, height as usize)?; // Added ?
-    println!("Window created successfully (Native Res: {}x{}).", width, height);
+    let camera_native_width = camera.width();
+    let camera_native_height = camera.height();
+    let mut window = WindowOutput::new("Rusty Eyes", camera_native_width as usize, camera_native_height as usize)?;
+    println!("Window created successfully (Native Res: {}x{}).", camera_native_width, camera_native_height);
+    
+    // Store as f32 for landmark coordinate scaling
+    let camera_width_f32 = camera_native_width as f32;
+    let camera_height_f32 = camera_native_height as f32;
 
     // Setup Calibration Manager
     let mut calibration_manager = CalibrationManager::new("calibration_data")?;
@@ -719,9 +723,9 @@ fn main() -> anyhow::Result<()> {
                                 
                                 for (idx, p) in l.points.iter().enumerate() {
                                     // MediaPipe returns normalized coordinates (0.0-1.0)
-                                    // Scale to pixel coordinates
-                                    let x = (p.x * width as f32) as usize;
-                                    let y = (p.y * height as f32) as usize;
+                                    // Scale to pixel coordinates using CAMERA resolution, not window size
+                                    let x = (p.x * camera_width_f32) as usize;
+                                    let y = (p.y * camera_height_f32) as usize;
                                     
                                     // Debug first and last landmark
                                     if idx == 0 {
