@@ -26,7 +26,7 @@ from grpc_health.v1 import health_pb2_grpc
 
 
 
-VERSION = "0.2.44"
+VERSION = "0.2.45"
 
 class StreamManager:
     """Manages Pub/Sub for gaze streams"""
