@@ -350,6 +350,12 @@ fn main() -> anyhow::Result<()> {
                 loop {
                     match grpc_rx.message().await {
                         Ok(Some(result)) => {
+                            println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+                            println!("🔵 GRPC MESSAGE RECEIVED FROM SERVER");
+                            println!("   Faces: {}", result.faces.len());
+                            println!("   Total landmarks: {}", result.faces.iter().map(|f| f.landmarks.len()).sum::<usize>());
+                            println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+                            
                             let res = rusty_eyes::streaming::grpc_client::proto_to_result(result);
                             log::info!("Received remote result: {} faces, {} landmarks total", 
                                 res.faces.len(),
