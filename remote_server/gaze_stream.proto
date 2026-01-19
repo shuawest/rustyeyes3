@@ -28,12 +28,17 @@ message VideoFrame {
 
 // Face mesh result from server
 message FaceMeshResult {
-  repeated Landmark landmarks = 1;  // 468 face mesh landmarks
-  BoundingBox face_box = 2;         // Face bounding box
-  GazeVector gaze = 3;              // Gaze direction
+  repeated Face faces = 1;          // Detected faces
   int64 timestamp_us = 4;           // Original frame timestamp
   string stream_id = 5;             // Matching stream_id
   map<string, int64> trace_timestamps = 6; // Debug tracing
+}
+
+// Single detected face
+message Face {
+  repeated Landmark landmarks = 1;  // 468 face mesh landmarks
+  BoundingBox face_box = 2;         // Face bounding box
+  GazeVector gaze = 3;              // Gaze direction
 }
 
 // 3D landmark point
