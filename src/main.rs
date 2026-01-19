@@ -953,6 +953,9 @@ fn main() -> anyhow::Result<()> {
             if show_overlay {
                  // 1. Menu Items
                  let mut menu_str = String::new();
+                 // Add version header
+                 menu_str.push_str(&format!("RUSTY-EYES v{}|", env!("CARGO_PKG_VERSION")));
+                 
                  for (key, label, active) in menu_items.iter() {
                      let status = if *active { "ON" } else { "OFF" };
                      // Format: [1] FACE MESH: ON
