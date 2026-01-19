@@ -1,6 +1,6 @@
 [package]
 name = "rusty-eyes"
-version = "0.3.2"
+version = "0.3.3"
 edition = "2021"
 default-run = "rusty-eyes"
 
@@ -34,7 +34,7 @@ minifb = "0.24"
 rusttype = "0.9"
 ndarray = "0.15"
 bincode = "1.3"
-smartcore = { version = "0.3.2", features = ["serde"] }
+smartcore = { version = "0.3.3", features = ["serde"] }
 rand = "0.8"
 log = "0.4"
 simplelog = "0.12"
