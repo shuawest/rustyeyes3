@@ -500,28 +500,31 @@ fn main() -> anyhow::Result<()> {
                           composite_points.extend(face.landmarks.points.clone());
                      }
                      
+                     // Only update if we have actual landmarks
                      if composite_points.len() > 0 {
                          log::info!("Prepared {} landmarks for rendering from {} face(s)", composite_points.len(), res.faces.len());
-                     }
-                     
-                     // Use First Face Gaze
-                     if let Some(first_face) = res.faces.first() {
-                         if let Some((yaw, pitch)) = first_face.gaze {
-                            best_remote = Some(PipelineOutput::Gaze {
-                                left_eye: types::Point3D::default(),
-                                right_eye: types::Point3D::default(),
-                                yaw,
-                                pitch,
-                                roll: 0.0,
-                                vector: types::Point3D::default(),
-                                landmarks: Some(types::Landmarks { points: composite_points }),
-                            });
-                         } else {
-                            // Landmarks only
-                            best_remote = Some(PipelineOutput::Landmarks(types::Landmarks { points: composite_points }));
+                         
+                         // Use First Face Gaze
+                         if let Some(first_face) = res.faces.first() {
+                             if let Some((yaw, pitch)) = first_face.gaze {
+                                best_remote = Some(PipelineOutput::Gaze {
+                                    left_eye: types::Point3D::default(),
+                                    right_eye: types::Point3D::default(),
+                                    yaw,
+                                    pitch,
+                                    roll: 0.0,
+                                    vector: types::Point3D::default(),
+                                    landmarks: Some(types::Landmarks { points: composite_points }),
+                                });
+                             } else {
+                                // Landmarks only
+                                best_remote = Some(PipelineOutput::Landmarks(types::Landmarks { points: composite_points }));
+                             }
                          }
+                     } else {
+                         log::info!("No faces detected - will persist last known mesh");
                      }
-                }
+                 }
 
              
              // Override local output if we have a fresh remote result
