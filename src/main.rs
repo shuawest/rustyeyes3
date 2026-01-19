@@ -735,9 +735,7 @@ fn main() -> anyhow::Result<()> {
                                 
                                 // Log window dimensions used for scaling (once per frame)
                                 // Log window dimensions used for scaling (once per frame)
-                                let mut logged_dims_local = false; // We use a local tracking for this block if needed, but we have the static one above? 
-                                // Actually, let's use the static one but safely, or just remove it and log every 300 frames?
-                                // Let's just log if it's the first time
+                                static mut LOGGED_DIMS: bool = false;
                                 unsafe {
                                     if !LOGGED_DIMS {
                                         log::info!("Window dimensions for scaling: {}x{}", width, height);
