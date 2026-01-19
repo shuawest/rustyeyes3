@@ -26,7 +26,7 @@ from grpc_health.v1 import health_pb2_grpc
 
 
 
-VERSION = "0.3.0"
+VERSION = "0.3.1"
 
 class StreamManager:
     """Manages Pub/Sub for gaze streams"""
@@ -70,7 +70,7 @@ class GazeStreamService(gaze_stream_pb2_grpc.GazeStreamServiceServicer):
         # Initialize MediaPipe Face Mesh
         self.mp_face_mesh = mp.solutions.face_mesh
         self.face_mesh = self.mp_face_mesh.FaceMesh(
-            max_num_faces=1,
+            max_num_faces=5,
             refine_landmarks=True,
             min_detection_confidence=0.5,
             min_tracking_confidence=0.5
