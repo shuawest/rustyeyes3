@@ -26,7 +26,7 @@ from grpc_health.v1 import health_pb2_grpc
 
 
 
-VERSION = "0.2.46"
+VERSION = "0.2.47"
 
 class StreamManager:
     """Manages Pub/Sub for gaze streams"""
@@ -184,97 +184,78 @@ class GazeStreamService(gaze_stream_pb2_grpc.GazeStreamServiceServicer):
                         # Let's just populate Gaze if we had it, but for simplicity let's stick to landmarks for multi-face first.
                         # Or just do geometric gaze for first face only?
                         # Let's do simple geometric per face if needed.
-                        pass
-                    
-                    # Add recv timestamp we captured earlier
-                    result.trace_timestamps["server_recv"] = ts_recv
-                    
-                    # Estimate gaze using Iris Tracking (Geometric)
-                    # 468: Left Iris Center, 473: Right Iris Center
-                    # Left Eye: 33 (Inner), 133 (Outer)
-                    # Right Eye: 362 (Inner), 263 (Outer)
-                    
-                    try:
-                        # Extract key points
-                        lm_pts = face_landmarks.landmark
-                        
-                        # Helper to get numpy point
-                        get_pt = lambda idx: np.array([lm_pts[idx].x, lm_pts[idx].y])
-                        
-                        # Left Eye
-                        p_left_iris = get_pt(468)
-                        p_left_inner = get_pt(133) # Inner corner (closer to nose in image? 133 is outer, 33 is inner for left eye usually? let's stick to X ranges)
-                        p_left_outer = get_pt(33) 
-                        
-                        # Right Eye
-                        p_right_iris = get_pt(473)
-                        p_right_inner = get_pt(362)
-                        p_right_outer = get_pt(263)
-                        
-                        # Calculate horizontal ratio (0.0 = looking left, 1.0 = looking right)
-                        # We use simple linear interpolation of Iris X between Inner/Outer X
-                        
-                        def get_ratio(val, min_v, max_v):
-                            return (val - min_v) / (max_v - min_v + 1e-6)
+                        # Gaze Calculation (Geometric)
+                        try:
+                            # Extract key points
+                            lm_pts = face_landmarks.landmark
                             
-                        # Left Eye Ratio (Outer is left in image X? No, Inner 133 is left? MediaPipe X increases left-to-right)
-                        # Eye 1 (Left, user's right): 33 (inner/right side), 133 (outer/left side)
-                        # Wait, X increases Left->Right.
-                        # Left Eye (User's Left) is on Right side of image (if mirrored).
-                        # Let's assume non-mirrored raw frame.
-                        # Left Eye (User's Left) is generally x > 0.5.
-                        # Right Eye (User's Right) is generally x < 0.5.
-                        
-                        # Just use distance logic to be safe against mirroring assumptions
-                        dl_width = np.linalg.norm(p_left_outer - p_left_inner)
-                        dl_iris = np.linalg.norm(p_left_iris - p_left_outer) # Distance from outer
-                        ratio_l = dl_iris / dl_width
-                        
-                        dr_width = np.linalg.norm(p_right_outer - p_right_inner)
-                        dr_iris = np.linalg.norm(p_right_iris - p_right_outer) # Distance from outer
-                        ratio_r = dr_iris / dr_width
-                        
-                        avg_ratio = (ratio_l + ratio_r) / 2.0
-                        
-                        # Map ratio to Yaw (0.5 = center/0 deg)
-                        # If ratio > 0.5, looking right (positive yaw)
-                        # If ratio < 0.5, looking left (negative yaw)
-                        # Scale: +/- 30 degrees seems reasonable for screen bounds
-                        result.gaze.yaw = (avg_ratio - 0.5) * 60.0 # +/- 30 deg
-                        
-                        # For Pitch (Vertical)
-                        # Left Eye Top/Bottom: 159 / 145
-                        # Right Eye Top/Bottom: 386 / 374
-                        p_left_top = get_pt(159)
-                        p_left_bot = get_pt(145)
-                        h_left = np.linalg.norm(p_left_top - p_left_bot)
-                        h_iris_l = np.linalg.norm(p_left_iris - p_left_top)
-                        ratio_y_l = h_iris_l / h_left
-                        
-                        p_right_top = get_pt(386)
-                        p_right_bot = get_pt(374)
-                        h_right = np.linalg.norm(p_right_top - p_right_bot)
-                        h_iris_r = np.linalg.norm(p_right_iris - p_right_top)
-                        ratio_y_r = h_iris_r / h_right
-                        
-                        avg_ratio_y = (ratio_y_l + ratio_y_r) / 2.0
-                        
-                        # Map to Pitch
-                        # 0.5 = center
-                        # < 0.5 = looking up (iris closer to top)
-                        # > 0.5 = looking down
-                        # Invert because usually Pitch Up is positive or negative depending on convention.
-                        # Let's assume Pitch Up (looking top) is positive.
-                        # Low ratio = High Pitch.
-                        result.gaze.pitch = -(avg_ratio_y - 0.5) * 40.0 # +/- 20 deg
-                        result.gaze.roll = 0.0
-                        
-                    except Exception as e:
-                        # Fallback if indices fail
-                        print(f"[SERVER] Gaze calc failed: {e}")
-                        result.gaze.yaw = 0.0
-                        result.gaze.pitch = 0.0
-                        result.gaze.roll = 0.0
+                            # Helper to get numpy point
+                            get_pt = lambda idx: np.array([lm_pts[idx].x, lm_pts[idx].y])
+                            
+                            # Left Eye
+                            p_left_iris = get_pt(468)
+                            p_left_outer = get_pt(33) 
+                            p_left_inner = get_pt(133) 
+                            
+                            # Right Eye
+                            p_right_iris = get_pt(473)
+                            p_right_inner = get_pt(362)
+                            p_right_outer = get_pt(263)
+                            
+                            # Simple logic: Iris distance from "Outer" corner relative to width
+                            # For Left Eye (User's Right side in mirrored view, or User's Left in real world):
+                            # ID 33 is Outer Left (User perspective left?) -> No.
+                            # MediaPipe Mesh: 
+                            # Left Eye: 33 (Inner), 133 (Outer) -> wait, verification needed.
+                            # Actually, usually: 
+                            # Left Eye (User's Left): 33 (Inner/Nose), 133 (Outer/Ear) -> X increases left to right.
+                            # So 33 (Left) < 133 (Right).
+                            # If looking LEFT (x decreases), Iris is closer to 33.
+                            # If looking RIGHT (x increases), Iris is closer to 133.
+                            
+                            # Let's simple Avg Ratio
+                            dl_width = np.linalg.norm(p_left_outer - p_left_inner)
+                            dl_iris = np.linalg.norm(p_left_iris - p_left_inner) # Dist from Inner (Left)
+                            ratio_l = dl_iris / dl_width
+                            
+                            dr_width = np.linalg.norm(p_right_outer - p_right_inner)
+                            dr_iris = np.linalg.norm(p_right_iris - p_right_inner) # Dist from Inner (Left)
+                            ratio_r = dr_iris / dr_width
+                            
+                            avg_ratio = (ratio_l + ratio_r) / 2.0
+                            
+                            # 0.0 = Left (Inner), 1.0 = Right (Outer)
+                            # 0.5 = Center
+                            face_msg.gaze.yaw = (avg_ratio - 0.5) * 60.0
+                            
+                            # Pitch
+                            p_left_top = get_pt(159)
+                            p_left_bot = get_pt(145)
+                            h_left = np.linalg.norm(p_left_top - p_left_bot)
+                            h_iris_l = np.linalg.norm(p_left_iris - p_left_top)
+                            ratio_y_l = h_iris_l / h_left
+                            
+                            p_right_top = get_pt(386)
+                            p_right_bot = get_pt(374)
+                            h_right = np.linalg.norm(p_right_top - p_right_bot)
+                            h_iris_r = np.linalg.norm(p_right_iris - p_right_top)
+                            ratio_y_r = h_iris_r / h_right
+                            
+                            avg_ratio_y = (ratio_y_l + ratio_y_r) / 2.0
+                            
+                            # 0.0 = Top, 1.0 = Bottom
+                            # Pitch Down = Positive (usually)
+                            # Looking Top = Low ratio.
+                            # Center = 0.5
+                            face_msg.gaze.pitch = (avg_ratio_y - 0.5) * 40.0
+                            face_msg.gaze.roll = 0.0
+                            
+                        except Exception as e:
+                            # Fallback
+                            # print(f"[SERVER] Gaze calc failed: {e}")
+                            face_msg.gaze.yaw = 0.0
+                            face_msg.gaze.pitch = 0.0
+                            face_msg.gaze.roll = 0.0
                     
                 
                 if frame_count % 30 == 0:

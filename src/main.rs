@@ -195,7 +195,13 @@ fn main() -> anyhow::Result<()> {
     std::thread::spawn(move || {
         use moondream::MoondreamOracle;
         use types::Point3D;
-        let mut oracle = MoondreamOracle::new().expect("Failed to init Moondream Worker");
+        let mut oracle = match MoondreamOracle::new() {
+            Ok(o) => o,
+            Err(e) => {
+                println!("[WARNING] Failed to init Moondream Worker (Feature Disabled): {}", e);
+                return;
+            }
+        };
         println!("Moondream Worker Started.");
         
         while let Ok(first_frame) = rx_frame.recv() {
