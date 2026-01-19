@@ -54,7 +54,7 @@ function stop() {
 
 function log() {
     echo "Tailing log file: $LOG_FILE"
-    tail -f "$LOG_FILE"
+    tail -n 200 -f "$LOG_FILE"
 }
 
 function status() {
