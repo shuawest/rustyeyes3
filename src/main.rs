@@ -735,7 +735,7 @@ fn main() -> anyhow::Result<()> {
                                         log::info!("Last landmark: ({:.3}, {:.3}) -> pixel ({}, {})", p.x, p.y, x, y);
                                     }
                                     
-                                    if x < width as usize && y < height as usize {
+                                    if x < camera_native_width as usize && y < camera_native_height as usize {
                                          drawn_count += 1;
                                          // Draw Configurable Dot
                                          for dy in 0..dot_size {
