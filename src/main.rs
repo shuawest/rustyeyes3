@@ -740,7 +740,7 @@ fn main() -> anyhow::Result<()> {
                                          // Draw Configurable Dot
                                          for dy in 0..dot_size {
                                              for dx in 0..dot_size {
-                                                 let idx = ((y + dy) * width as usize + (x + dx)) * 3;
+                                                 let idx = ((y + dy) * camera_native_width as usize + (x + dx)) * 3;
                                                  if idx + 2 < display_buffer.len() {
                                                      display_buffer[idx] = mr;
                                                      display_buffer[idx+1] = mg;
