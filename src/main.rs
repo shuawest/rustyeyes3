@@ -78,7 +78,7 @@ fn main() -> anyhow::Result<()> {
     });
     
     let _ = simplelog::WriteLogger::init(
-        simplelog::LevelFilter::Info,
+        simplelog::LevelFilter::Trace,
         simplelog::Config::default(),
         log_file
     );

@@ -3,7 +3,7 @@
 # Configuration
 BINARY="./target/release/rusty-eyes"
 ARGS="--remote-dgx http://jowestdgxe:50051"
-LOG_FILE="client.log"
+LOG_FILE="wrapper.log"
 PID_FILE=".client.pid"
 
 function start() {
