@@ -26,7 +26,7 @@ from grpc_health.v1 import health_pb2_grpc
 
 
 
-VERSION = "0.2.47"
+VERSION = "0.2.48"
 
 class StreamManager:
     """Manages Pub/Sub for gaze streams"""
@@ -268,6 +268,8 @@ class GazeStreamService(gaze_stream_pb2_grpc.GazeStreamServiceServicer):
                 yield result
         
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             print(f"[SERVER] Error processing stream: {e}")
             # Don't crash the server loop, just end this stream
             # context.set_code(grpc.StatusCode.INTERNAL)
