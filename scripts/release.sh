@@ -35,8 +35,8 @@ echo "Bumping version: $CURRENT_VERSION -> $NEW_VERSION"
 # 3. Update Files
 # Rust
 sed -i '' "s/version = \"$CURRENT_VERSION\"/version = \"$NEW_VERSION\"/" $CARGO_TOML
-# Python
-sed -i '' "s/VERSION = \"$CURRENT_VERSION\"/VERSION = \"$NEW_VERSION\"/" $SERVER_PY
+# Python - Update distinct from Rust version in case of drift
+sed -i '' "s/VERSION = \".*\"/VERSION = \"$NEW_VERSION\"/" $SERVER_PY
 
 echo "Files updated."
 
