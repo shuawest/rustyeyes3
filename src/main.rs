@@ -146,6 +146,26 @@ fn main() -> anyhow::Result<()> {
     let mut pipeline = create_pipeline(available_models[active_model_index], &config).unwrap();
     println!("Active Pipeline: {}", pipeline.name());
 
+    // --- SETUP PANIC HOOK ---
+    std::panic::set_hook(Box::new(|info| {
+        let msg = match info.payload().downcast_ref::<&'static str>() {
+            Some(s) => *s,
+            None => match info.payload().downcast_ref::<String>() {
+                Some(s) => &**s,
+                None => "Box<Any>",
+            },
+        };
+        let location = info.location().map(|l| format!("{}:{}", l.file(), l.line())).unwrap_or_else(|| "unknown".to_string());
+        let log_msg = format!("CRASH PANIC: '{}' at {}", msg, location);
+        
+        eprintln!("{}", log_msg); // Print to stderr (captured by client.log)
+        
+        // Also try to write to a dedicated crash log
+        if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open("crash.log") {
+             let _ = writeln!(file, "{}", log_msg);
+        }
+    }));
+
     // 3. Setup Output
     // We get the actual format from the camera
     let camera_native_width = camera.width();
@@ -713,10 +733,15 @@ fn main() -> anyhow::Result<()> {
                                 let mut skipped_count = 0;
                                 
                                 // Log window dimensions used for scaling (once per frame)
-                                static mut LOGGED_DIMS: bool = false;
+                                // Log window dimensions used for scaling (once per frame)
+                                let mut logged_dims_local = false; // We use a local tracking for this block if needed, but we have the static one above? 
+                                // Actually, let's use the static one but safely, or just remove it and log every 300 frames?
+                                // Let's just log if it's the first time
                                 unsafe {
                                     if !LOGGED_DIMS {
                                         log::info!("Window dimensions for scaling: {}x{}", width, height);
+                                        log::info!("Camera Native Dims: {}x{}", camera_native_width, camera_native_height);
+                                        log::info!("Buffer Size: {} bytes", display_buffer.len());
                                         LOGGED_DIMS = true;
                                     }
                                 }
