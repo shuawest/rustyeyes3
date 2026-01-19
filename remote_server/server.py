@@ -26,7 +26,7 @@ from grpc_health.v1 import health_pb2_grpc
 
 
 
-VERSION = "0.2.54"
+VERSION = "0.2.55"
 
 class StreamManager:
     """Manages Pub/Sub for gaze streams"""
@@ -273,7 +273,17 @@ def serve(port=50051, rest_port=8080):
     """Start the gRPC server"""
     global grpc_service_ref
     
-    server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
+    server = grpc.server(
+        futures.ThreadPoolExecutor(max_workers=10),
+        options=[
+            ('grpc.keepalive_time_ms', 10000), 
+            ('grpc.keepalive_timeout_ms', 5000), 
+            ('grpc.keepalive_permit_without_calls', True),
+            ('grpc.http2.max_pings_without_data', 0),
+            ('grpc.http2.min_time_between_pings_ms', 10000),
+            ('grpc.http2.min_ping_interval_without_data_ms', 5000),
+        ]
+    )
     # Keep reference for REST API
     service_instance = GazeStreamService()
     grpc_service_ref = service_instance
