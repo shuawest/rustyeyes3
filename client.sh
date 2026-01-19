@@ -128,7 +128,7 @@ case "$1" in
         ;;
     build-log)
         echo "Tailing build log..."
-        tail -f build.log
+        tail -n 200 -f build.log
         ;;
     build)
         echo "Starting Build..."
