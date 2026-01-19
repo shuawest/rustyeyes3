@@ -159,24 +159,32 @@ class GazeStreamService(gaze_stream_pb2_grpc.GazeStreamServiceServicer):
                 result.trace_timestamps["server_proc_end"] = now_us
                 
                 if results.multi_face_landmarks:
-                    # Extract first face
-                    face_landmarks = results.multi_face_landmarks[0]
-                    
-                    # Convert landmarks to proto format
-                    for landmark in face_landmarks.landmark:
-                        lm = result.landmarks.add()
-                        lm.x = landmark.x
-                        lm.y = landmark.y
-                        lm.z = landmark.z
-                    
-                    # Calculate bounding box
-                    x_coords = [lm.x for lm in result.landmarks]
-                    y_coords = [lm.y for lm in result.landmarks]
-                    if x_coords and y_coords:
-                        result.face_box.x = min(x_coords)
-                        result.face_box.y = min(y_coords)
-                        result.face_box.width = max(x_coords) - min(x_coords)
-                        result.face_box.height = max(y_coords) - min(y_coords)
+                    for i, face_landmarks in enumerate(results.multi_face_landmarks):
+                        face_msg = result.faces.add()
+                        
+                        # Landmarks
+                        for landmark in face_landmarks.landmark:
+                            lm = face_msg.landmarks.add()
+                            lm.x = landmark.x
+                            lm.y = landmark.y
+                            lm.z = landmark.z
+                        
+                        # Bounding Box
+                        x_coords = [lm.x for lm in face_msg.landmarks]
+                        y_coords = [lm.y for lm in face_msg.landmarks]
+                        if x_coords and y_coords:
+                            face_msg.face_box.x = min(x_coords)
+                            face_msg.face_box.y = min(y_coords)
+                            face_msg.face_box.width = max(x_coords) - min(x_coords)
+                            face_msg.face_box.height = max(y_coords) - min(y_coords)
+                            
+                        # Gaze? (Calculated per face?)
+                        # For now, replicate logic or skip gaze if simple geometry is enough.
+                        # Existing logic used iris? 
+                        # Let's just populate Gaze if we had it, but for simplicity let's stick to landmarks for multi-face first.
+                        # Or just do geometric gaze for first face only?
+                        # Let's do simple geometric per face if needed.
+                        pass
                     
                     # Add recv timestamp we captured earlier
                     result.trace_timestamps["server_recv"] = ts_recv
