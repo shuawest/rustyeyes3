@@ -708,6 +708,15 @@ fn main() -> anyhow::Result<()> {
                                 let mut drawn_count = 0;
                                 let mut skipped_count = 0;
                                 
+                                // Log window dimensions used for scaling (once per frame)
+                                static mut LOGGED_DIMS: bool = false;
+                                unsafe {
+                                    if !LOGGED_DIMS {
+                                        log::info!("Window dimensions for scaling: {}x{}", width, height);
+                                        LOGGED_DIMS = true;
+                                    }
+                                }
+                                
                                 for (idx, p) in l.points.iter().enumerate() {
                                     // MediaPipe returns normalized coordinates (0.0-1.0)
                                     // Scale to pixel coordinates
