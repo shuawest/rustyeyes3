@@ -664,8 +664,10 @@ fn main() -> anyhow::Result<()> {
                                 let dot_size = config.ui.mesh_dot_size;
                                 
                                 for p in &l.points {
-                                    let x = p.x as usize;
-                                    let y = p.y as usize;
+                                    // MediaPipe returns normalized coordinates (0.0-1.0)
+                                    // Scale to pixel coordinates
+                                    let x = (p.x * width as f32) as usize;
+                                    let y = (p.y * height as f32) as usize;
                                     if x < width as usize && y < height as usize {
                                          // Draw Configurable Dot
                                          for dy in 0..dot_size {
