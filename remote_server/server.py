@@ -26,7 +26,7 @@ from grpc_health.v1 import health_pb2_grpc
 
 
 
-VERSION = "0.2.49"
+VERSION = "0.2.50"
 
 class StreamManager:
     """Manages Pub/Sub for gaze streams"""
@@ -346,10 +346,13 @@ def serve(port=50051, rest_port=8080):
     health_servicer.set("gazestream.GazeStreamService", health_pb2.HealthCheckResponse.SERVING)
     
     # Bind to all interfaces
-    server.add_insecure_port(f'[::]:{port}')
+    bound_port = server.add_insecure_port(f'[::]:{port}')
+    if bound_port == 0:
+        raise RuntimeError(f"Failed to bind to port {port}. Is it already in use?")
+    
     server.start()
     
-    print(f"[SERVER] gRPC Gaze Streaming Server v{VERSION} started on port {port}")
+    print(f"[SERVER] gRPC Gaze Streaming Server v{VERSION} started on bound port {bound_port}")
     
     # Start REST API in background thread
     rest_thread = threading.Thread(target=run_rest_server, args=(rest_port,), daemon=True)
