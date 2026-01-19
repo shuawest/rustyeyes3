@@ -350,22 +350,33 @@ fn main() -> anyhow::Result<()> {
                 loop {
                     match grpc_rx.message().await {
                         Ok(Some(result)) => {
-                            println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-                            println!("🔵 GRPC MESSAGE RECEIVED FROM SERVER");
-                            println!("   Faces: {}", result.faces.len());
-                            println!("   Total landmarks: {}", result.faces.iter().map(|f| f.landmarks.len()).sum::<usize>());
-                            println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-                            
-                            log::info!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-                            log::info!("🔵 GRPC MESSAGE RECEIVED FROM SERVER");
-                            log::info!("   Faces: {}", result.faces.len());
-                            log::info!("   Total landmarks: {}", result.faces.iter().map(|f| f.landmarks.len()).sum::<usize>());
-                            log::info!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-                            
                             let res = rusty_eyes::streaming::grpc_client::proto_to_result(result);
-                            log::info!("Received remote result: {} faces, {} landmarks total", 
+                            
+                            // Calculate latency if trace timestamps are available
+                            let now_us = std::time::SystemTime::now()
+                                .duration_since(std::time::UNIX_EPOCH)
+                                .unwrap()
+                                .as_micros() as i64;
+                            
+                            let mut latency_info = String::new();
+                            if let Some(client_send) = res.trace_timestamps.get("client_send") {
+                                let total_latency_ms = (now_us - client_send) as f64 / 1000.0;
+                                latency_info = format!(" | Latency: {:.1}ms", total_latency_ms);
+                                
+                                if let (Some(server_recv), Some(server_proc)) = 
+                                    (res.trace_timestamps.get("server_recv"), res.trace_timestamps.get("server_proc_end")) {
+                                    let network_up_ms = (server_recv - client_send) as f64 / 1000.0;
+                                    let server_proc_ms = (server_proc - server_recv) as f64 / 1000.0;
+                                    let network_down_ms = (now_us - server_proc) as f64 / 1000.0;
+                                    latency_info = format!(" | Net↑:{:.1}ms Proc:{:.1}ms Net↓:{:.1}ms Total:{:.1}ms", 
+                                        network_up_ms, server_proc_ms, network_down_ms, total_latency_ms);
+                                }
+                            }
+                            
+                            log::info!("Remote: {} faces, {} landmarks{}", 
                                 res.faces.len(),
-                                res.faces.iter().map(|f| f.landmarks.points.len()).sum::<usize>()
+                                res.faces.iter().map(|f| f.landmarks.points.len()).sum::<usize>(),
+                                latency_info
                             );
                             // sync_channel send blocks, but we are in a dedicated thread for runtime, so it's okay?
                             // Actually tx_res.send might error if receiver is dropped
