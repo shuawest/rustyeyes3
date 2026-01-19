@@ -101,6 +101,7 @@ case "$1" in
         stop
         ;;
     check-build)
+    build-stat)
         if pgrep -f "cargo build" > /dev/null; then
             echo "Build is RUNNING"
             pgrep -fl "cargo build"
