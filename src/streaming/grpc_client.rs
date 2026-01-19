@@ -45,7 +45,8 @@ impl GazeStreamClient {
         mpsc::Sender<proto::VideoFrame>,
         tonic::Streaming<proto::FaceMeshResult>,
     )> {
-        let (tx, rx) = mpsc::channel(32);
+        // Use size 1 to prevent bufferbloat. If network is slow, drop frames immediately.
+        let (tx, rx) = mpsc::channel(1);
         let request_stream = ReceiverStream::new(rx);
         
         let response = self.client.stream_gaze(request_stream).await?;

@@ -401,7 +401,8 @@ fn main() -> anyhow::Result<()> {
         if remote_available && use_remote {
              remote_frame_count += 1;
              // Send frame (non-blocking, drop if full) - TRY FULL FPS
-             if remote_frame_count % 1 == 0 {
+             // Rate Limit: Send every 2nd frame (approx 15 FPS) to avoid flooding network
+             if remote_frame_count % 2 == 0 {
                  // Downscale for network efficiency (Fixes Upload Latency)
                  let scaled_frame = image::imageops::resize(
                      &latest_realtime_frame, 
