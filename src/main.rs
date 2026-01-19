@@ -78,7 +78,7 @@ fn main() -> anyhow::Result<()> {
     });
     
     let _ = simplelog::WriteLogger::init(
-        simplelog::LevelFilter::Trace,
+        simplelog::LevelFilter::Info,
         simplelog::Config::default(),
         log_file
     );
@@ -487,10 +487,11 @@ fn main() -> anyhow::Result<()> {
              
              // Override local output if we have a fresh remote result
              // Override local output if we have a fresh remote result
-             if let Some(remote_out) = best_remote {
-                 last_valid_remote_output = Some(remote_out.clone());
-                 output = Some(remote_out);
-             } else if let Some(last_remote) = &last_valid_remote_output {
+              if let Some(remote_out) = best_remote {
+                  log::info!("Using fresh remote output in main loop");
+                  last_valid_remote_output = Some(remote_out.clone());
+                  output = Some(remote_out);
+              } else if let Some(last_remote) = &last_valid_remote_output {
                  // Persist the last known mesh so it doesn't flicker
                  output = Some(last_remote.clone());
              }
@@ -642,6 +643,11 @@ fn main() -> anyhow::Result<()> {
         // display_buffer is already init with frame pixels above
         
         if let Some(out) = &last_pipeline_output {
+            log::info!("Rendering output with variant: {}", match out {
+                PipelineOutput::Gaze { landmarks, .. } => format!("Gaze with {} landmarks", landmarks.as_ref().map(|l| l.points.len()).unwrap_or(0)),
+                PipelineOutput::Landmarks(l) => format!("Landmarks: {}", l.points.len()),
+                _ => "Other".to_string(),
+            });
             match out {
                     PipelineOutput::Gaze { left_eye, right_eye, yaw, pitch, roll: _ , vector: _, landmarks } => {
                        
