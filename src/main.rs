@@ -459,10 +459,26 @@ fn main() -> anyhow::Result<()> {
                 while let Ok(res) = rx_remote_result.try_recv() {
                      last_remote_ts = std::time::Instant::now();
                      
+                     // Log detailed face information
+                     if res.faces.len() > 0 {
+                         for (i, face) in res.faces.iter().enumerate() {
+                             let gaze_info = if let Some((yaw, pitch)) = face.gaze {
+                                 format!(" [Gaze: yaw={:.1}°, pitch={:.1}°]", yaw, pitch)
+                             } else {
+                                 String::new()
+                             };
+                             log::info!("Face {}: {} landmarks{}", i+1, face.landmarks.points.len(), gaze_info);
+                         }
+                     }
+                     
                      // Concat all points for rendering from all faces
                      let mut composite_points = Vec::new();
                      for face in res.faces.iter() {
                           composite_points.extend(face.landmarks.points.clone());
+                     }
+                     
+                     if composite_points.len() > 0 {
+                         log::info!("Prepared {} landmarks for rendering from {} face(s)", composite_points.len(), res.faces.len());
                      }
                      
                      // Use First Face Gaze
