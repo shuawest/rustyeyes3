@@ -351,6 +351,10 @@ fn main() -> anyhow::Result<()> {
                     match grpc_rx.message().await {
                         Ok(Some(result)) => {
                             let res = rusty_eyes::streaming::grpc_client::proto_to_result(result);
+                            log::info!("Received remote result: {} faces, {} landmarks total", 
+                                res.faces.len(),
+                                res.faces.iter().map(|f| f.landmarks.points.len()).sum::<usize>()
+                            );
                             // sync_channel send blocks, but we are in a dedicated thread for runtime, so it's okay?
                             // Actually tx_res.send might error if receiver is dropped
                             if let Err(e) = tx_res.send(res) {
