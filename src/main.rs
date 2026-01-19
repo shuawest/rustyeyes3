@@ -448,7 +448,11 @@ fn main() -> anyhow::Result<()> {
         // --- CAMERA CAPTURE ---
         // Capture from both cameras and blend if second camera exists
         
-        let latest_realtime_frame = if let Ok(mut cam_frame) = camera.capture() {
+        let (latest_realtime_frame, inference_frame) = if let Ok(mut cam_frame) = camera.capture() {
+            // 1. Create Interence Frame (Clean RGB)
+            let mut infer_frame = cam_frame.clone();
+
+            // 2. Create Display Frame (Blended)
             // If we have a second camera and blending is enabled, blend the frames
             if blend_cameras {
                 if let Some(ref mut cam2) = camera2 {
@@ -472,11 +476,12 @@ fn main() -> anyhow::Result<()> {
                 }
             }
             
-            // Mirror if enabled
+            // Mirror if enabled (MUST Mirror both to keep coordinates aligned)
             if mirror_mode {
                 image::imageops::flip_horizontal_in_place(&mut cam_frame);
+                image::imageops::flip_horizontal_in_place(&mut infer_frame);
              }
-             cam_frame
+             (cam_frame, infer_frame)
         } else {
              // If no frame, skip this loop iteration? Or reuse last frame?
              // Reuse last for stability
@@ -501,7 +506,7 @@ fn main() -> anyhow::Result<()> {
              if remote_frame_count % 1 == 0 {
                  // Send RAW frame to worker (offload processing to avoid blocking UI)
                  // Clone is cheap (memcpy). Resize/Grayscale is expensive.
-                 match tx_remote_frame.try_send(image::DynamicImage::ImageRgb8(latest_realtime_frame.clone())) {
+                 match tx_remote_frame.try_send(image::DynamicImage::ImageRgb8(inference_frame.clone())) {
                      Ok(_) => {},
                      Err(std::sync::mpsc::TrySendError::Full(_)) => {
                          // Worker is busy, drop frame (Good behavior)
@@ -578,9 +583,8 @@ fn main() -> anyhow::Result<()> {
         // --- MOONDREAM DISPATCH ---
         let mut calculated_screen_coords: Option<(f32, f32)> = None;
         if moondream_active {
-             // Clone frame? This might be heavy. dynamic_image from cam_frame?
-             // cam_frame is RgbBuffer.
-             let img = image::DynamicImage::ImageRgb8(latest_realtime_frame.clone());
+             // Use Inference Frame for Moondream (Cleaner)
+             let img = image::DynamicImage::ImageRgb8(inference_frame.clone());
                          // Unified Coordinate Calculation (Guarantees Blue/Green synchronization)
              if let Some(out) = &output {
                   if let PipelineOutput::Gaze { yaw, pitch, .. } = out {
