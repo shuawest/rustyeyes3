@@ -1,4 +1,5 @@
 use clap::Parser;
+use std::io::Write;
 
 // Use modules from the library
 use rusty_eyes::args;
