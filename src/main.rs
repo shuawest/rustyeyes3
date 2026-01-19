@@ -459,6 +459,15 @@ fn main() -> anyhow::Result<()> {
                             pixel1[1] = (pixel1[1] / 2).saturating_add(pixel2[1] / 2);
                             pixel1[2] = (pixel1[2] / 2).saturating_add(pixel2[2] / 2);
                         }
+                    } else {
+                        // Log failure (once)
+                        static mut LOG_CAM2_FAIL: bool = false;
+                        unsafe {
+                            if !LOG_CAM2_FAIL {
+                                log::warn!("Camera 2 capture failed! Blending skipped. (Likely USB bandwidth saturation)");
+                                LOG_CAM2_FAIL = true;
+                            }
+                        }
                     }
                 }
             }
