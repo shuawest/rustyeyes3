@@ -15,4 +15,4 @@ echo "[DEPLOY] Syncing code to $REMOTE_HOST:~/$REMOTE_DIR..."
 # --delete: delete extraneous files from dest dirs (optional, but good for clean sync)
 # --exclude: skip large/unnecessary artifacts
 echo "[DEPLOY] Triggering Pull, Build, and Restart on $REMOTE_HOST..."
-ssh -t $REMOTE_HOST "cd $REMOTE_DIR && git stash && git pull && cargo build --release --bin rusty-eyes && export DISPLAY=:0 && ./run.sh"
+ssh -t $REMOTE_HOST "cd $REMOTE_DIR && git config user.email 'deploy@bot.local' && git config user.name 'Deploy Bot' && git stash && git pull && cargo build --release --bin rusty-eyes && export DISPLAY=:0 && ./run.sh"
