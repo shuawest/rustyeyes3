@@ -345,6 +345,8 @@ impl L2CSPipeline {
                     .with_optimization_level(GraphOptimizationLevel::Level3)?
                     .with_intra_threads(4)?
                     .with_execution_providers([
+                        ort::execution_providers::TensorRTExecutionProvider::default().build(),
+                        ort::execution_providers::CUDAExecutionProvider::default().build(),
                         ort::execution_providers::CoreMLExecutionProvider::default().build(),
                         ort::execution_providers::CPUExecutionProvider::default().build(),
                     ])?
@@ -649,6 +651,8 @@ impl MobileGazePipeline {
                     .with_optimization_level(GraphOptimizationLevel::Level3)?
                     .with_intra_threads(4)?
                     .with_execution_providers([
+                        ort::execution_providers::TensorRTExecutionProvider::default().build(),
+                        ort::execution_providers::CUDAExecutionProvider::default().build(),
                         ort::execution_providers::CoreMLExecutionProvider::default().build(),
                         ort::execution_providers::CPUExecutionProvider::default().build(),
                     ])?
