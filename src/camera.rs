@@ -3,7 +3,7 @@ use colored::*;
 use image::{ImageBuffer, Rgb};
 use nokhwa::{
     pixel_format::RgbFormat,
-    utils::{CameraIndex, RequestedFormat, RequestedFormatType, Resolution},
+    utils::{CameraFormat, CameraIndex, FrameFormat, RequestedFormat, RequestedFormatType, Resolution},
     Camera,
 };
 
@@ -16,7 +16,11 @@ impl CameraSource {
         let cam_index = CameraIndex::Index(index as u32);
         // Optimize: Request 640x480 directly to avoid expensive software resize
         let requested = RequestedFormat::new::<RgbFormat>(
-            RequestedFormatType::Closest(Resolution::new(640, 480))
+            RequestedFormatType::Closest(CameraFormat::new(
+                Resolution::new(640, 480),
+                FrameFormat::MJPEG, 
+                30
+            ))
         );
         let mut camera =
             Camera::new(cam_index, requested).context("Failed to create camera instance")?;
