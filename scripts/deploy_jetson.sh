@@ -2,7 +2,7 @@
 set -e
 
 REMOTE_HOST="jetsone"
-REMOTE_DIR="rustyeyes3"
+REMOTE_DIR="dev/repos/rustyeyes3"
 
 # Check if we are in the root of the repo
 if [ ! -f "Cargo.toml" ]; then
