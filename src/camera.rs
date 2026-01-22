@@ -3,7 +3,7 @@ use colored::*;
 use image::{ImageBuffer, Rgb};
 use nokhwa::{
     pixel_format::RgbFormat,
-    utils::{CameraIndex, RequestedFormat, RequestedFormatType},
+    utils::{CameraIndex, RequestedFormat, RequestedFormatType, Resolution},
     Camera,
 };
 
@@ -14,8 +14,10 @@ pub struct CameraSource {
 impl CameraSource {
     pub fn new(index: usize) -> Result<Self> {
         let cam_index = CameraIndex::Index(index as u32);
-        let requested =
-            RequestedFormat::new::<RgbFormat>(RequestedFormatType::AbsoluteHighestFrameRate);
+        // Optimize: Request 640x480 directly to avoid expensive software resize
+        let requested = RequestedFormat::new::<RgbFormat>(
+            RequestedFormatType::Closest(Resolution::new(640, 480))
+        );
         let mut camera =
             Camera::new(cam_index, requested).context("Failed to create camera instance")?;
 
