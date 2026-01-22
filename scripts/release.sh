@@ -53,9 +53,8 @@ echo "Git push complete."
 echo "Deploying to Server (jowestdgxe)..."
 ./remote_server/deploy.sh
 
-# 6. Trigger Client Build
-echo "Triggering Client Build (jetsone)..."
-# Use client.sh to ensure environment variables (like DISPLAY) and logging are consistent
-ssh jetsone "cd ~/dev/repos/rustyeyes3 && git pull && ./client.sh build"
+# 6. Trigger Client Build & Restart
+echo "Triggering Client Build & Restart (jetsone)..."
+./scripts/deploy_jetson.sh
 
 echo "Release v$NEW_VERSION completed successfully!"

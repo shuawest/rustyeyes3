@@ -220,10 +220,17 @@ fn main() -> anyhow::Result<()> {
     std::thread::spawn(move || {
         use moondream::MoondreamOracle;
         use types::Point3D;
+        // Check if Moondream is actually needed before initializing the heavy python sidecar
+        // Ideally we pass this in via channel or atomic, but for now let's just try-init and warn-return
         let mut oracle = match MoondreamOracle::new() {
             Ok(o) => o,
             Err(e) => {
-                println!("[WARNING] Failed to init Moondream Worker (Feature Disabled): {}", e);
+                println!("[WARNING] Moondream Sidecar failed to start (torch missing?): {}", e);
+                // Instead of returning (which kills the receiver and causes the main thread to panic on send/recv),
+                // we should enter a dummy loop that just drains the channel to keep the main thread happy.
+                while let Ok(_) = rx_frame.recv() {
+                    // Drain and ignore
+                }
                 return;
             }
         };

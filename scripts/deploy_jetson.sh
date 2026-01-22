@@ -14,8 +14,5 @@ echo "[DEPLOY] Syncing code to $REMOTE_HOST:~/$REMOTE_DIR..."
 # Using rsync to sync files. 
 # --delete: delete extraneous files from dest dirs (optional, but good for clean sync)
 # --exclude: skip large/unnecessary artifacts
-rsync -avz --exclude 'target' --exclude 'venv' --exclude '.git' --exclude 'models' --exclude '__pycache__' ./ $REMOTE_HOST:~/$REMOTE_DIR/
-
-echo "[DEPLOY] Running build on remote host..."
-# We explicitly call bash to run the script
-ssh -t $REMOTE_HOST "cd $REMOTE_DIR && bash run.sh"
+echo "[DEPLOY] Triggering Pull, Build, and Restart on $REMOTE_HOST..."
+ssh -t $REMOTE_HOST "cd $REMOTE_DIR && git stash && git pull && cargo build --release --bin rusty-eyes && export DISPLAY=:0 && ./run.sh"
