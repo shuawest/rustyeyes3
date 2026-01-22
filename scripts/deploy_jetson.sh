@@ -15,4 +15,4 @@ echo "[DEPLOY] Syncing code to $REMOTE_HOST:~/$REMOTE_DIR..."
 # --delete: delete extraneous files from dest dirs (optional, but good for clean sync)
 # --exclude: skip large/unnecessary artifacts
 echo "[DEPLOY] Triggering Pull, Build, and Restart on $REMOTE_HOST..."
-ssh -t $REMOTE_HOST "cd $REMOTE_DIR && bash scripts/setup_jetson.sh"
+ssh -t $REMOTE_HOST "cd $REMOTE_DIR && git pull && bash scripts/setup_jetson.sh"
