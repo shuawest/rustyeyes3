@@ -6,7 +6,8 @@
     "mirror_mode": true,
     "show_overlay": true,
     "moondream_active": false,
-    "head_pose_length": 150.0
+    "head_pose_length": 150.0,
+    "remote_dgx_url": null
   },
   "ui": {
     "menu_scale": 2,

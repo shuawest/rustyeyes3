@@ -332,43 +332,43 @@ fn main() -> anyhow::Result<()> {
                 // Spawn sender task
                 let mut rx_frame = rx_remote_frame; // Take ownership
                 tokio::spawn(async move {
-                    while let Ok(frame) = rx_frame.recv() {
-                         // PERFORM HEAVY PROCESSING HERE (Off Main Thread)
-                         let rgb = frame.to_rgb8();
-                         
-                         // 1. Resize (1280x720 -> 640x480)
-                         let scaled = image::imageops::resize(
-                             &rgb, 
-                             640, 
-                             480, 
-                             image::imageops::FilterType::Triangle
-                         );
-                         
-                         // 2. Grayscale (3 channels -> 1 channel)
-                         let gray = image::imageops::grayscale(&scaled);
-                         
-                         // 3. Encode & Send
-                         // Note: frame_to_proto expects Rgb8 usually, but we can adapt it or just wrap 
-                         // effectively passing Gray as Rgb (tripling bytes) or update frame_to_proto.
-                         // But `grayscale` returns ImageGray (Luma8).
-                         // Let's pass the DynamicImage to a new helper or update frame_to_proto to handle Dynamic?
-                         // Current `frame_to_proto` takes `&ImageBuffer<Rgb<u8>...>`.
-                         
-                         // Hack: Convert Gray back to RGB to satisfy signature, OR send Grayscale over wire?
-                         // Ideally we send 1 channel.
-                         // Let's rely on DynamicImage feature of frame_to_proto if we modify it, 
-                         // or just modify frame_to_proto to take DynamicImage.
-                         // For now, let's update `frame_to_proto` signature in next step.
-                         // HERE: I will call a MODIFIED frame_to_proto that performs the encoding.
-                         
-                         let proto_frame = rusty_eyes::streaming::grpc_client::frame_to_proto_gray(
-                             &gray, 0, "camera1"
-                         );
+                     while let Ok(frame) = rx_frame.recv() {
+                          // PERFORM HEAVY PROCESSING HERE (Off Main Thread)
+                          let start_proc = std::time::Instant::now();
+                          let rgb = frame.to_rgb8();
+                          
+                          // 1. Resize (1280x720 -> 640x480)
+                          let scaled = image::imageops::resize(
+                              &rgb, 
+                              640, 
+                              480, 
+                              image::imageops::FilterType::Triangle
+                          );
+                          
+                          // 2. Grayscale (3 channels -> 1 channel)
+                          let gray = image::imageops::grayscale(&scaled);
+                          
+                          let proc_dur = start_proc.elapsed();
 
-                         if let Err(_) = grpc_tx.send(proto_frame).await {
-                             break;
-                         }
-                    }
+                          // 3. Encode & Send
+                          let start_encode = std::time::Instant::now();
+                          let proto_frame = rusty_eyes::streaming::grpc_client::frame_to_proto_gray(
+                              &gray, 0, "camera1"
+                          );
+                          let encode_dur = start_encode.elapsed();
+
+                          let start_send = std::time::Instant::now();
+                          if let Err(e) = grpc_tx.send(proto_frame).await {
+                              log::error!("Failed to send frame: {}", e);
+                              break;
+                          }
+                          let send_dur = start_send.elapsed();
+
+                          // Log if any step is unusually slow (>10ms)
+                          if proc_dur.as_millis() > 10 || encode_dur.as_millis() > 10 || send_dur.as_millis() > 10 {
+                               log::info!("Perf Warning | Proc: {:?} | Encode: {:?} | Send (Queue+Net): {:?}", proc_dur, encode_dur, send_dur);
+                          }
+                     }
                 });
                 
                 // Receiver loop

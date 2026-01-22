@@ -26,7 +26,7 @@ from grpc_health.v1 import health_pb2_grpc
 
 
 
-VERSION = "0.4.4"
+VERSION = "0.4.5"
 
 class StreamManager:
     """Manages Pub/Sub for gaze streams"""
@@ -276,6 +276,9 @@ def serve(port=50051, rest_port=8080):
     server = grpc.server(
         futures.ThreadPoolExecutor(max_workers=10),
         options=[
+            ('grpc.max_send_message_length', 50 * 1024 * 1024),
+            ('grpc.max_receive_message_length', 50 * 1024 * 1024),
+            ('grpc.so_reuseport', 1),
             ('grpc.keepalive_time_ms', 10000), 
             ('grpc.keepalive_timeout_ms', 5000), 
             ('grpc.keepalive_permit_without_calls', True),

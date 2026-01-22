@@ -3796,6 +3796,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "ordered-float"
+version = "5.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7f4779c6901a562440c3786d08192c6fbda7c1c2060edd10006b05ee35d10f2d"
+dependencies = [
+ "num-traits",
+]
+
+[[package]]
 name = "ort"
 version = "2.0.0-rc.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4592,7 +4601,7 @@ checksum = "b39cdef0fa800fc44525c84ccb54a029961a8215f9619753635a9c0d2538d46d"
 
 [[package]]
 name = "rusty-eyes"
-version = "0.2.41"
+version = "0.4.4"
 dependencies = [
  "anyhow",
  "bincode",
@@ -4882,14 +4891,15 @@ checksum = "51d44cfb396c3caf6fbfd0ab422af02631b69ddd96d2eff0b0f0724f9024051b"
 
 [[package]]
 name = "smartcore"
-version = "0.3.2"
+version = "0.4.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c42ca1fcd851ada8834d3dfcd088850dc8c703bde50c2baccd89181b74dc3ade"
+checksum = "4778d2147b30115a6d2433cebae6bc4871c64c224dff3c8bbbfddfd3862c399c"
 dependencies = [
  "approx",
  "cfg-if 1.0.4",
  "num",
  "num-traits",
+ "ordered-float",
  "rand 0.8.5",
  "serde",
  "typetag",

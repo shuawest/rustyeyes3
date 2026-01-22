@@ -35,6 +35,8 @@ impl GazeStreamClient {
         let channel = tonic::transport::Endpoint::from_shared(url.clone())?
             .tcp_nodelay(true)
             .tcp_keepalive(Some(std::time::Duration::from_secs(60)))
+            .initial_stream_window_size(Some(1024 * 1024)) // 1MB
+            .initial_connection_window_size(Some(1024 * 1024)) // 1MB
             .timeout(std::time::Duration::from_secs(30))
             .connect()
             .await
