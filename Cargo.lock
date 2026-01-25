@@ -3810,6 +3810,7 @@ version = "2.0.0-rc.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1fa7e49bd669d32d7bc2a15ec540a527e7764aec722a45467814005725bcd721"
 dependencies = [
+ "libloading",
  "ndarray 0.16.1",
  "ort-sys",
  "smallvec 2.0.0-alpha.10",
@@ -4601,7 +4602,7 @@ checksum = "b39cdef0fa800fc44525c84ccb54a029961a8215f9619753635a9c0d2538d46d"
 
 [[package]]
 name = "rusty-eyes"
-version = "0.4.5"
+version = "0.4.15"
 dependencies = [
  "anyhow",
  "bincode",

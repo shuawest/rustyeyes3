@@ -141,7 +141,8 @@ fn train_svr_model(entries: &[DataPoint], model_name: &str) -> anyhow::Result<()
     let y_x_data: Vec<f64> = entries.iter().map(|e| e.target_x as f64).collect();
     let y_y_data: Vec<f64> = entries.iter().map(|e| e.target_y as f64).collect();
 
-    let x_matrix = DenseMatrix::from_2d_vec(&x_data);
+    let x_matrix = DenseMatrix::from_2d_vec(&x_data)
+        .map_err(|e| anyhow::anyhow!("Failed to create matrix: {}", e))?;
 
     // RBF Kernel is best for non-linear gaze mapping
     // RBF Kernel is best for non-linear gaze mapping
